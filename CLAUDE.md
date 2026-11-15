@@ -39,7 +39,11 @@ Tout est généré par code (aucun fichier 3D externe hormis les deux .glb). Cou
 
 ## Publication
 
-Le jeu est publié comme artefact claude.ai : https://claude.ai/artifact/Va25Gjd89VEc3i6ys3tYo2. Depuis Claude Code, il suffit de travailler sur les fichiers locaux ; la republication se fait depuis l'app Claude.
+- Dépôt GitHub (public) : https://github.com/StoneTheking/ile-aux-fougeres, branche `main`.
+- Version jouable : https://stonetheking.github.io/ile-aux-fougeres/ (GitHub Pages, servi depuis la racine de `main`). Chaque `git push` sur `main` met le jeu en ligne à jour en une ou deux minutes.
+- Pour modifier depuis un autre ordinateur : ouvrir une session Claude Code sur ce dépôt (claude.ai/code), puis commit + push.
+- Commits signés avec l'adresse noreply GitHub (ne pas mettre d'e-mail personnel dans le dépôt public).
+- Ancienne publication en artefact claude.ai : https://claude.ai/artifact/Va25Gjd89VEc3i6ys3tYo2 (republication manuelle depuis l'app).
 
 Un doc de suivi des assets (cases à cocher) existe aussi dans l'app : https://claude.ai/artifact/2KSpWyWXx7CeSj1ShQZVDn
 
