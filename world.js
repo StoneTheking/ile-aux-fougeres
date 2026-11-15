@@ -788,7 +788,7 @@ function gJungle(r) {
   g.wf = 0; for (let i = 0; i < 5; i++) { const a = i * 1.257 + 0.3; g.add(new THREE.ConeGeometry(0.4, 2.8, 5, 1, true), BARK.jungle, M(Math.cos(a) * 0.55, 0.95, Math.sin(a) * 0.55, 1, 1, 0.45, Math.sin(a) * -0.28, -a, Math.cos(a) * 0.28), 0.3, 0.2); }
   // lianes : chacune accrochée sous une touffe de feuillage (cachée dans le bas de la touffe)
   const top = g.cl.filter(q => q.k === 1);
-  for (let i = 0; i < 7; i++) { g.wf = 0.9; g.wp = r(); const cl = top[(i * 3) % top.length], a = r() * 6.28, d = cl.rad * (0.15 + 0.3 * r()), x = cl.c.x + Math.cos(a) * d, z = cl.c.z + Math.sin(a) * d, y0 = cl.c.y - cl.rad * 0.25, L = 2.5 + r() * 3.5; limb(g, new V3(x, y0, z), new V3(x + r() * 0.3, y0 - L, z + r() * 0.3), 0.03, 0.02, '#5d7d3c', 3, 0); for (let k = 0; k < 3; k++) leaf(g, new V3(x, y0 - L * (0.4 + k * 0.3), z), new V3(r() - 0.5, -0.6, r() - 0.5).normalize(), 0.4, 0.2, lin('#4a7a38'), lin('#6f9a48')); }
+  for (let i = 0; i < 7; i++) { g.wf = 0.9; g.wp = r(); const cl = top[(i * 3) % top.length], a = r() * 6.28, d = cl.rad * (0.15 + 0.3 * r()), x = cl.c.x + Math.cos(a) * d, z = cl.c.z + Math.sin(a) * d, y0 = cl.c.y - cl.rad * 0.25, L = 2.5 + r() * 3.5; const vt = new V3(x, y0, z), vb = new V3(x + r() * 0.3, y0 - L, z + r() * 0.3); limb(g, vt, vb, 0.03, 0.02, '#5d7d3c', 3, 0); for (let k = 0; k < 3; k++) leaf(g, vt.clone().lerp(vb, 0.4 + k * 0.3), new V3(r() - 0.5, -0.6, r() - 0.5).normalize(), 0.4, 0.2, lin('#4a7a38'), lin('#6f9a48')); }
   return g.build();
 }
 function gFrangi(r) {
