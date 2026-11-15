@@ -282,9 +282,9 @@ function buildTerrain() {
   sand *= 0.965 + 0.035 * sin((vWP.x * 0.8 + vWP.z * 0.5) * 3.0 + n2 * 9.0);
   sand = mix(sand, vec3(1.0, 0.96, 0.74), smoothstep(0.7, 0.95, n5) * 0.4);
   float wetK = smoothstep(0.55, 0.0, th + n3 * 0.3);
-  { vec2 nn = normalize(vWP.xz + vec2(1e-4)); float amp = mix(0.18, 0.98, dot(nn, -uWind.xy) * 0.5 + 0.5) * (0.4 + 0.6 * uWind.z);
+  { vec2 nn = normalize(vWP.xz + vec2(1e-4)); float amp = mix(0.32, 0.98, dot(nn, -uWind.xy) * 0.5 + 0.5) * (0.4 + 0.6 * uWind.z);
     float ph = uTime * 0.55 + (sin(vWP.x * 0.021) + sin(vWP.z * 0.017 + 1.3)) * 1.5, x = fract(ph / 6.2831853), since = x < 0.3 ? x + 0.7 : x - 0.3;
-    float reach = amp * 0.65 + n3 * 0.06; // plus haut point atteint par la dernière vague
+    float reach = 0.55 + amp * 0.75 + n3 * 0.06; // plus haut point atteint par la dernière vague
     float wet = (1.0 - smoothstep(reach - 0.02, reach + 0.03, th)) * exp(-since * 2.6);
     wetK = max(wetK, wet * 0.95); }
   vec3 tc = mix(sand, sand * vec3(0.66, 0.6, 0.5) + uSkyC * 0.16, wetK);
@@ -348,8 +348,8 @@ const WU = {
 };
 function swashPhase(x, z, t) { return t * 0.55 + (Math.sin(x * 0.021) + Math.sin(z * 0.017 + 1.3)) * 1.5; }
 function swashG(ph) { const x = ((ph / 6.2831853) % 1 + 1) % 1; return x < 0.3 ? smooth(0, 0.3, x) : 1 - smooth(0.3, 1, x); }
-function waveAmp(x, z) { const d = Math.hypot(x, z) || 1, w = WU.uWind.value; const e = (x / d * -w.x + z / d * -w.y) * 0.5 + 0.5; return lerp(0.18, 0.98, e) * (0.4 + 0.6 * w.z); }
-function waterLevel(x, z) { return waveAmp(x, z) * (swashG(swashPhase(x, z, U.time.value)) - 0.35); }
+function waveAmp(x, z) { const d = Math.hypot(x, z) || 1, w = WU.uWind.value; const e = (x / d * -w.x + z / d * -w.y) * 0.5 + 0.5; return lerp(0.32, 0.98, e) * (0.4 + 0.6 * w.z); }
+function waterLevel(x, z) { const a = waveAmp(x, z); return swashG(swashPhase(x, z, U.time.value)) * (0.55 + 1.15 * a) - 0.4 * a; } // même formule que le shader de l'eau
 const WATER_VS = `
 uniform sampler2D uH; uniform float uTime; uniform vec3 uWind;
 varying vec3 vW; varying float vAmp; varying float vCrest; varying float vCp; varying float vSw;
@@ -358,11 +358,11 @@ void main(){
   vec4 w = modelMatrix * vec4(position, 1.0);
   vec2 n = normalize(w.xz + vec2(1e-4));
   float expo = dot(n, -uWind.xy) * 0.5 + 0.5;
-  float amp = mix(0.18, 0.98, expo) * (0.4 + 0.6 * uWind.z);
+  float amp = mix(0.32, 0.98, expo) * (0.4 + 0.6 * uWind.z);
   float ph = uTime * 0.55 + (sin(w.x * 0.021) + sin(w.z * 0.017 + 1.3)) * 1.5;
   float x = fract(ph / 6.2831853);
   float g = x < 0.3 ? smoothstep(0.0, 0.3, x) : 1.0 - smoothstep(0.3, 1.0, x);
-  float lvl = amp * (g - 0.35);
+  float lvl = g * (0.55 + 1.15 * amp) - 0.4 * amp; // la vague remonte loin sur le sable
   float d = max(lvl - hAt(w.xz), 0.0);
   // houle du large, portée par le vent
   vec2 wp = vec2(-uWind.y, uWind.x);
