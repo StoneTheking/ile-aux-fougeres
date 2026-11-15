@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>L'Île aux Fougères</title>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Cormorant+Garamond:ital,wght@1,500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overflow:hidden;background:#0d2a44;font-family:Fredoka,system-ui,sans-serif;color:#fff;user-select:none;-webkit-user-select:none;touch-action:none}
+#app{position:fixed;left:0;top:0;width:100vw;height:100vh;overflow:hidden}
+body.rot #app{transform-origin:0 0;transform:rotate(90deg) translateY(-100%)}
+#c{position:absolute;inset:0;width:100%;height:100%;display:block}
+.poem{font-family:'Cormorant Garamond',Georgia,serif;font-style:italic}
+#start{position:absolute;inset:0;z-index:50;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;text-align:center;padding:24px;
+ background:radial-gradient(ellipse at 50% 40%,#12487a66 0%,#0d3a66b3 60%,#0a2540e6 100%);transition:opacity 1.2s}
+#start h1{font-size:clamp(34px,7vmax,68px);margin:0;font-weight:600;letter-spacing:.5px;text-shadow:0 3px 0 #0a3a63}
+#start .poem{font-size:clamp(17px,3vmax,26px);opacity:.92;max-width:26em;margin:0}
+#play{font:inherit;font-size:22px;font-weight:600;color:#1a3d1f;background:#ffe27a;border:0;border-radius:999px;padding:14px 46px;margin-top:10px;cursor:pointer;box-shadow:0 5px 0 #c99b2b}
+#play:active{transform:translateY(3px);box-shadow:0 2px 0 #c99b2b}
+#keys{font-size:14px;opacity:.85;line-height:1.7;max-width:34em}
+#keys b{background:#ffffff26;border-radius:6px;padding:1px 7px;font-weight:600}
+#hud{position:absolute;inset:0;pointer-events:none;z-index:10}
+#cross{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:#fff;opacity:.75;box-shadow:0 0 0 1.5px #0005}
+#prompt{position:absolute;left:50%;bottom:24%;transform:translateX(-50%);background:#0e2b3fcc;border-radius:999px;padding:8px 18px;font-size:16px;white-space:nowrap;opacity:0;transition:opacity .15s}
+#prompt b{background:#ffe27a;color:#1a3d1f;border-radius:6px;padding:0 7px;margin-right:6px}
+#toast{position:absolute;left:50%;top:14%;transform:translateX(-50%);width:min(88%,34em);text-align:center;font-size:clamp(18px,3.2vmax,30px);text-shadow:0 2px 8px #000a;opacity:0;transition:opacity 1.2s}
+#toast small{display:block;font-family:Fredoka,sans-serif;font-style:normal;font-size:14px;opacity:.8;margin-top:6px}
+#item{position:absolute;right:16px;bottom:16px;font-size:15px;background:#0e2b3f99;border-radius:999px;padding:6px 14px}
+#spy{position:absolute;inset:0;pointer-events:none;z-index:9;opacity:0;background:radial-gradient(circle at 50% 50%,transparent 0,transparent 33vmin,#0b0a08 34.5vmin)}
+#bj{position:absolute;inset:0;width:100%;height:100%;z-index:12;display:none;pointer-events:none}
+#bjTouch{position:absolute;left:0;right:0;bottom:0;height:30%;z-index:13;display:none;gap:6px;padding:8px}
+#bjTouch div{flex:1;border-radius:16px}
+#talk{position:absolute;left:50%;bottom:6%;transform:translateX(-50%);width:min(92%,40em);z-index:14;display:none;background:#0e2b3fe6;border:2px solid #ffffff30;border-radius:18px;padding:14px 18px}
+#talk .who{font-weight:600;color:#ffe27a;font-size:17px;margin-bottom:4px}
+#talk .txt{font-size:17px;line-height:1.45;margin-bottom:10px}
+#talk .opt{padding:6px 10px;border-radius:10px;font-size:15px;cursor:pointer;opacity:.85}
+#talk .opt b{display:inline-block;background:#ffffff26;border-radius:6px;padding:0 7px;margin-right:8px}
+#talk .opt.on{background:#ffe27a;color:#1a3d1f;opacity:1}
+#talk .opt.on b{background:#1a3d1f22}
+#helmet{position:absolute;inset:0;pointer-events:none;z-index:9;opacity:0;transition:opacity .6s;background:radial-gradient(circle at 50% 46%,transparent 0,transparent 36vmin,rgba(20,60,60,.35) 39vmin,#3a2a10 40vmin,#c9a24a 42vmin,#e8c870 43.5vmin,#8a6a2a 46vmin,#2a1e0a 48vmin,#0a0805 52vmin)}
+#lids{position:absolute;inset:0;pointer-events:none;z-index:15;display:none}
+#lidT,#lidB{position:absolute;left:0;right:0;height:0;background:#000;transition:height .15s}
+#lidT{top:0;border-radius:0 0 50% 50%/0 0 30% 30%}#lidB{bottom:0;border-radius:50% 50% 0 0/30% 30% 0 0}
+#sub{position:absolute;left:50%;bottom:9%;transform:translateX(-50%);width:min(90%,38em);text-align:center;font-size:20px;line-height:1.45;z-index:16;opacity:0;transition:opacity .5s;text-shadow:0 2px 8px #000c}
+#sub .who{font-size:14px;color:#ffe27a;letter-spacing:.08em;text-transform:uppercase;margin-bottom:4px}
+#boatHud{position:absolute;left:50%;bottom:4%;transform:translateX(-50%);font-size:14px;opacity:0;z-index:8;text-shadow:0 1px 4px #000a;transition:opacity .4s}
+#catch{position:absolute;left:50%;top:12%;transform:translateX(-50%);text-align:center;z-index:8;opacity:0;text-shadow:0 2px 8px #000a;pointer-events:none}
+#catch .cn{font-size:26px;font-weight:600;color:#ffe27a}#catch .cs{font-size:16px;opacity:.85}
+#tt{position:absolute;left:50%;top:7%;transform:translateX(-50%);text-align:center;z-index:8;opacity:0;text-shadow:0 2px 8px #000a;pointer-events:none}
+#tt .big{font-size:44px;font-weight:600;color:#fff}#tt .small{font-size:15px;opacity:.9}
+#skip{position:absolute;right:20px;bottom:20px;z-index:17;display:none;background:#0e2b3fcc;color:#fff;border:2px solid #ffffff40;border-radius:12px;padding:8px 14px;font:inherit;cursor:pointer}
+#fade{position:absolute;inset:0;background:#000;opacity:0;pointer-events:none;z-index:40;transition:opacity 1s}
+#wheel{position:absolute;inset:0;z-index:30;display:none;align-items:center;justify-content:center;background:#04172866}
+#wheel .ring{position:relative;width:300px;height:300px}
+#wheel .slot{position:absolute;width:74px;height:74px;margin:-37px;border-radius:50%;background:#12384fe6;border:3px solid #ffffff40;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:30px;line-height:1;transition:transform .1s,background .1s}
+#wheel .slot small{font-size:11px;margin-top:2px;opacity:.9}
+#wheel .slot.on{background:#ffe27a;color:#1a3d1f;border-color:#fff;transform:scale(1.18)}
+#wheel .name{position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;font-size:18px;font-weight:600}
+#wheel svg{width:34px;height:34px}
+.btn{font:inherit;color:#fff;background:#12384fd9;border:2px solid #ffffff40;border-radius:12px;padding:8px 12px;cursor:pointer}
+.btn.on{background:#ffe27a;color:#1a3d1f}
+#menuBtn{position:absolute;right:12px;top:12px;z-index:20;width:46px;height:46px;border-radius:50%;font-size:20px;padding:0}
+.panel{position:absolute;z-index:35;background:#0e2b3ff2;border:2px solid #ffffff30;border-radius:18px;padding:16px;display:none;font-size:15px}
+#menu{right:12px;top:66px;width:min(92%,320px)}
+#terra{left:12px;top:12px;width:min(92%,300px)}
+.panel{max-height:calc(100% - 24px);overflow-y:auto;touch-action:pan-y}
+#menu{max-height:calc(100% - 78px)}
+body.touch #terra{width:min(70%,250px);padding:10px;font-size:13px}
+body.touch #terra label{margin:6px 0 2px}
+.panel h3{margin:0 0 10px;font-size:18px}
+.panel label{display:block;margin:10px 0 4px;opacity:.9}
+.panel input[type=range]{width:100%}
+.row{display:flex;gap:6px;flex-wrap:wrap}
+.row .btn{flex:1;min-width:64px;font-size:14px}
+.panel textarea{width:100%;height:54px;border-radius:8px;border:0;font-size:11px;margin-top:6px;display:none}
+.hint{font-size:12.5px;opacity:.75;margin-top:8px;line-height:1.4}
+#touch{position:absolute;inset:0;z-index:15;display:none}
+#joy{position:absolute;width:120px;height:120px;margin:-60px;border-radius:50%;border:3px solid #ffffff55;background:#ffffff14;display:none;z-index:16;pointer-events:none}
+#joy i{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px;border-radius:50%;background:#ffffffaa}
+.tb{position:absolute;z-index:18;width:64px;height:64px;border-radius:50%;background:#12384fb3;border:2px solid #ffffff55;color:#fff;font:600 13px Fredoka,sans-serif;display:none;align-items:center;justify-content:center;text-align:center}
+.tb:active,.tb.on{background:#ffe27acc;color:#1a3d1f}
+#bUse{right:22px;bottom:96px;width:78px;height:78px}
+#bJump{right:112px;bottom:40px}
+#bAct{right:112px;bottom:128px}
+#bInv{right:22px;bottom:190px}
+#bRun{left:22px;bottom:190px}
+#bDown{right:190px;bottom:40px}
+body.touch #touch{display:block}
+body.touch .tb{display:flex}
+body.touch #bAct,body.touch #bDown{display:none}
+body.touch #bAct.show,body.touch.terra #bDown{display:flex}
+body.touch #item{bottom:auto;top:16px;right:70px}
+body.touch #prompt b{display:none}
+</style>
+</head>
+<body>
+<div id="app">
+<canvas id="c"></canvas>
+<div id="hud">
+  <div id="cross"></div>
+  <div id="prompt"></div>
+  </div>
+<div id="touch"></div>
+<div id="joy"><i></i></div>
+<div class="tb" id="bUse">Utiliser</div>
+<div class="tb" id="bJump">Saut</div>
+<div class="tb" id="bAct">Prendre</div>
+<div class="tb" id="bInv">Sac</div>
+<div class="tb" id="bRun">Courir</div>
+<div class="tb" id="bDown">▼</div>
+<button class="btn" id="menuBtn">☰</button>
+<div class="panel" id="menu">
+  <h3>Réglages</h3>
+  <label>Heure du jour : <span id="hourTxt"></span></label>
+  <input type="range" id="hour" min="0" max="24" step="0.05">
+  <label>Vitesse du temps</label>
+  <div class="row" id="speed"><button class="btn" data-v="0">Figé</button><button class="btn on" data-v="1">×1</button><button class="btn" data-v="8">×8</button><button class="btn" data-v="40">×40</button></div>
+  <label>Vent : <span id="windTxt"></span></label>
+  <div class="row"><button class="btn on" id="windAuto">Auto</button><input type="range" id="windDir" min="0" max="360" step="1" style="flex:3"></div>
+  <label>Divers</label>
+  <div class="row"><button class="btn on" id="sound">Son</button><button class="btn" id="shadows">Ombres</button><button class="btn" id="terraBtn">Terraformer</button></div>
+  <div class="row"><button class="btn" id="introBtn">Revoir l'arrivée</button></div>
+</div>
+<div class="panel" id="terra">
+  <h3 id="tTitle" style="cursor:pointer">Terraformation</h3>
+  <div class="row" id="tabs" style="margin-bottom:8px"><button class="btn on" data-m="terre">Relief</button><button class="btn" data-m="obj">Objets</button></div>
+  <div id="pObj" style="display:none">
+  <label>Élément</label><select id="oSel" style="width:100%;font:inherit;border-radius:8px;padding:6px"></select>
+  <div class="row" id="oMode" style="margin-top:8px"><button class="btn on" data-d="0">Poser</button><button class="btn" data-d="1">Supprimer</button></div>
+  <label>Taille : <span id="oszTxt"></span></label><input type="range" id="osz" min="0.2" max="4" step="0.05" value="1">
+  <div class="row" style="margin-top:8px"><button class="btn" id="oRot">Tourner</button><button class="btn" id="oReset">Réinit. objets</button></div>
+  <div class="hint" id="oHint"></div>
+  </div>
+  <div id="pTerre">
+  <div class="row" id="tools"><button class="btn on" data-t="up">Élever</button><button class="btn" data-t="down">Creuser</button><button class="btn" data-t="smooth">Lisser</button><button class="btn" data-t="flat">Aplanir</button></div>
+  <div id="tMore">
+  <label>Taille du pinceau : <span id="szTxt"></span></label><input type="range" id="sz" min="3" max="60" step="1" value="14">
+  <label>Force : <span id="stTxt"></span></label><input type="range" id="st" min="1" max="30" step="1" value="8">
+  <label>Île</label>
+  <div class="row"><button class="btn" id="tSave">Sauver</button><button class="btn" id="tCopy">Copier</button><button class="btn" id="tPaste">Coller</button><button class="btn" id="tReset">Réinit.</button></div>
+  <textarea id="tCode" placeholder="Colle ici le code d'une île puis appuie sur Coller"></textarea>
+  <div class="row" style="margin-top:8px"><button class="btn" id="tQuit">Quitter le mode</button></div>
+  <div class="hint" id="tHint"></div>
+  </div>
+  </div>
+</div>
+<div id="wheel"><div class="ring" id="ring"><div class="name" id="wname"></div></div></div>
+<div id="spy"></div>
+<div id="helmet"></div>
+<div id="lids"><div id="lidT"></div><div id="lidB"></div></div>
+<div id="sub"></div>
+<div id="boatHud"></div><div id="catch"></div><div id="tt"></div>
+<button id="skip">Passer ⏭</button>
+<canvas id="bj"></canvas><div id="bjTouch"></div>
+<div id="talk"><div class="who"></div><div class="txt"></div><div class="ch"></div></div>
+<div id="fade"></div>
+<div id="start">
+  <h1>L'Île aux Fougères</h1>
+  <p class="poem">« Le vent connaît le chemin. Il suffit de l'écouter. »</p>
+  <button id="play">Chargement…</button>
+  <div id="keys"></div>
+</div>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="world.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="village.js"></script>
+<script src="models.js"></script>
+<script src="assets.js"></script>
+<script src="sea.js"></script>
+<script src="extra.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
