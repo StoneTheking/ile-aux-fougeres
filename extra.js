@@ -28,10 +28,8 @@ function setupTurtle() {
   const b = best || { u: 16, v: -18 }; const tee = vp(b.u, b.v), ahead = vp(b.u, b.v - 10);
   TT.tee = new V3(tee.x, heightAt(tee.x, tee.z), tee.z); TT.dir = Math.atan2(-(ahead.x - tee.x), -(ahead.z - tee.z));
   const fx = -Math.sin(TT.dir), fz = -Math.cos(TT.dir), rx = Math.cos(TT.dir), rz = -Math.sin(TT.dir); TT.f = new V3(fx, 0, fz); TT.r = new V3(rx, 0, rz);
-  // décor : panneau des records, tremplin, piquets de distance
-  const g = new GB(), pm = mat({ ds: true, grain: 2.4, ga: 0.3 });
-  for (let k = 1; k <= 12; k++) { const d = k * 10, x = TT.tee.x + fx * d - rx * 3, z = TT.tee.z + fz * d - rz * 3, h = heightAt(x, z); if (h < 0.2) continue; limb(g, new V3(x, h - 0.2, z), new V3(x, h + 1.1, z), 0.05, 0.05, k % 5 ? '#e8e0d0' : '#d84a3a', 5, 0); g.add(new THREE.BoxGeometry(0.4, 0.25, 0.04), k % 5 ? '#e8e0d0' : '#d84a3a', M(x, h + 1.15, z, 1, 1, 1, 0, TT.dir, 0), 0.2); }
-  const mesh = new THREE.Mesh(g.build(), pm); mesh.castShadow = true; scene.add(mesh);
+  // décor : panneau des records, tremplin
+  const pm = mat({ ds: true, grain: 2.4, ga: 0.3 }); // (piquets de distance retirés)
   const sb = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1.1), new THREE.MeshLambertMaterial({ map: signTex('Le Grand Lancer', '#e8d0a0', '#3a1e10'), side: THREE.DoubleSide }));
   const sp = TT.tee.clone().addScaledVector(TT.r, -3.2); sb.position.set(sp.x, heightAt(sp.x, sp.z) + 1.9, sp.z); sb.rotation.y = TT.dir + Math.PI / 2; scene.add(sb);
   { const pg = new GB(); for (const s of [-0.9, 0.9]) limb(pg, new V3(0, -0.4, s), new V3(0, 1.5, s), 0.06, 0.06, '#6a4a2e', 5, 0); const pp = new THREE.Mesh(pg.build(), pm); pp.position.copy(sb.position).setY(heightAt(sp.x, sp.z)); pp.rotation.y = TT.dir; scene.add(pp); }
