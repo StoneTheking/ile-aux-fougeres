@@ -713,7 +713,7 @@ const SCALE = [146.83, 196, 220, 246.94, 293.66, 329.63, 369.99, 440, 493.88, 58
 function updateAudio(dt) {
   const c = AU.ctx; if (!c) return; const now = c.currentTime, set = (p, v) => p.setTargetAtTime(v, now, 0.12);
   const gh = heightAt(P.pos.x, P.pos.z), g = swashG(swashPhase(P.pos.x, P.pos.z, G.t)), amp = waveAmp(P.pos.x, P.pos.z);
-  const cdist = coastDist(P.pos.x, P.pos.z), seaMode = G.mode === 'boat' || G.mode === 'dive' || G.mode === 'intro', shore = seaMode ? 0.7 : clamp(Math.exp(-cdist / 26) * (1 - 0.6 * smooth(6, 30, gh)) * (1 - 0.75 * (VIL.inside || 0)), 0, 1), inland = smooth(2.5, 7, gh), gust = 0.55 + 0.45 * Math.sin(G.t * 0.7) * Math.sin(G.t * 0.23 + 1);
+  const cdist = coastDist(P.pos.x, P.pos.z), seaMode = G.mode === 'boat' || G.mode === 'dive' || G.mode === 'intro', shore = seaMode ? 0.7 : clamp(Math.exp(-cdist / 14) * (1 - smooth(20, 45, cdist)) * (1 - 0.6 * smooth(6, 30, gh)) * (1 - 0.75 * (VIL.inside || 0)), 0, 1), inland = smooth(2.5, 7, gh), gust = 0.55 + 0.45 * Math.sin(G.t * 0.7) * Math.sin(G.t * 0.23 + 1);
   set(AU.ocean.g.gain, 0.32 * shore * (0.3 + 0.7 * g) * (0.55 + 0.9 * amp)); set(AU.ocean.f.frequency, 330 + 800 * g);
   set(AU.hiss.g.gain, 0.045 * shore * shore * smooth(0.25, 0.9, g) * (0.5 + amp));
   set(AU.wind.g.gain, (0.025 + 0.1 * G.windStr * gust) * (1 + smooth(25, 70, gh) * 1.2)); set(AU.wind.f.frequency, 280 + 380 * G.windStr * gust);
