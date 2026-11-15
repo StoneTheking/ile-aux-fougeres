@@ -38,7 +38,7 @@ function updateSky(dt) {
   sunLight.target.position.copy(P.pos); sunLight.position.copy(P.pos).addScaledVector(ld, 220);
   const cp = camera.position;
   sky.position.copy(cp); stars.position.copy(cp); stars.material.opacity = SKY.night; stars.rotation.y = G.t * 0.0015;
-  const w = U.wind.value; SU.uOff.value.x += (w.x * 0.022 + 0.004) * dt; SU.uOff.value.y += (w.y * 0.022 + 0.002) * dt; // les nuages dérivent avec le vent, sans jamais sauter
+  const w = U.wind.value; SU.uOff.value.x -= w.x * 0.026 * dt; SU.uOff.value.y -= w.y * 0.026 * dt; // les nuages filent dans le sens du vent (décalage de texture opposé au mouvement)
 }
 const BEAR = ['le nord', 'le nord-est', 'l\'est', 'le sud-est', 'le sud', 'le sud-ouest', 'l\'ouest', 'le nord-ouest'];
 function updateWind() {
@@ -63,6 +63,7 @@ function setupInput() {
     if (BJ.on) return;
     if (VIL.talk && talkKey(e.code)) { e.preventDefault(); return; }
     if (TF.on && TF.mode === 'obj' && e.code === 'KeyR') { TF.ory += Math.PI / 8; return; }
+    if (TF.on && e.ctrlKey && (e.key || '').toLowerCase() === 'z') { e.preventDefault(); undoTerra(); return; } // Ctrl+Z : annuler le dernier coup de pinceau
     keys[e.code] = true;
     if (G.started && G.mode && G.mode !== 'walk' && modeKey(e.code)) { e.preventDefault(); return; }
     if (e.code === 'KeyE') inp.act = true;
@@ -536,7 +537,7 @@ function setupMenu() {
 }
 
 /* ---------- terraformation ---------- */
-const TF = { mode: 'terre', osel: 0, osz: 1, ory: 0, odel: false, ghost: null, gkey: '', on: false, tool: 'up', size: 14, str: 8, hit: null, flatH: 0, was: false, ring: null, dirty: false };
+const TF = { mode: 'terre', osel: 0, osz: 1, ory: 0, odel: false, ghost: null, gkey: '', on: false, tool: 'up', size: 14, str: 8, hit: null, flatH: 0, was: false, ring: null, dirty: false, undo: [] };
 function brushAt(cx, cz, r, fn) {
   const i0 = Math.max(0, Math.floor((cx - r + TS / 2) / TC)), i1 = Math.min(TN - 1, Math.ceil((cx + r + TS / 2) / TC)), j0 = Math.max(0, Math.floor((cz - r + TS / 2) / TC)), j1 = Math.min(TN - 1, Math.ceil((cz + r + TS / 2) / TC));
   for (let j = j0; j <= j1; j++) for (let i = i0; i <= i1; i++) { const d = Math.hypot(-TS / 2 + i * TC - cx, -TS / 2 + j * TC - cz) / r; if (d < 1) { const f = (1 - d * d) * (1 - d * d); fn(j * TN + i, f, i, j); } }
@@ -550,12 +551,13 @@ function terraRay() {
   }
   return null;
 }
+function undoTerra() { const h = TF.undo.pop(); if (!h) return; H.set(h); refreshTerrain(0, TN - 1, 0, TN - 1); TF.dirty = true; sfx('dig'); }
 function toggleTerra() {
   if (!G.started) return; TF.on = !TF.on; $('terra').style.display = TF.on ? 'block' : 'none'; document.body.classList.toggle('terra', TF.on); $('terraBtn').classList.toggle('on', TF.on);
   closeWheel(false); TF.ring.visible = TF.on;
   if (TF.on) { P.pos.y += 6; toast('<small style="font-size:17px">Mode terraformation : tu voles. Vise le sol et maintiens ' + (TOUCH ? '« Utiliser »' : 'le clic') + '.</small>', 5000); }
   else {
-    if (TF.dirty) { reseatAll(); buildCoastDist(); DIGS.forEach(d => d.mesh.position.y = heightAt(d.x, d.z)); TF.dirty = false; }
+    if (TF.dirty) { reseatAll(); buildCoastDist(); DIGS.forEach(d => d.mesh.position.y = heightAt(d.x, d.z)); TF.dirty = false; try { localStorage.setItem('ile-terrain2', encodeIsland()); } catch (_) { } } // sauvegarde automatique
     if (heightAt(P.pos.x, P.pos.z) < WADE) { const s = SPOTS.spawn; P.pos.set(s.x, heightAt(s.x, s.z), s.z); }
     P.vy = 0; P.ground = false;
   }
@@ -566,7 +568,7 @@ function setupTerra() {
   $('tools').querySelectorAll('button').forEach(b => b.onclick = () => { TF.tool = b.dataset.t; $('tools').querySelectorAll('button').forEach(q => q.classList.toggle('on', q === b)); });
   $('sz').oninput = () => { TF.size = +$('sz').value; $('szTxt').textContent = TF.size + ' m'; }; $('st').oninput = () => { TF.str = +$('st').value; $('stTxt').textContent = TF.str; };
   $('sz').oninput(); $('st').oninput();
-  $('tHint').innerHTML = TOUCH ? 'Joystick pour voler, « Saut » et ▼ pour monter et descendre. Maintiens « Utiliser » pour sculpter au centre de l\'écran.' : 'ZQSD pour voler, Espace et C pour monter et descendre, Maj pour accélérer. Clic maintenu pour sculpter, molette pour la taille, touches 1 à 4 pour l\'outil. Échap libère la souris pour ce panneau, F quitte le mode.';
+  $('tHint').innerHTML = TOUCH ? 'Joystick pour voler, « Saut » et ▼ pour monter et descendre. Maintiens « Utiliser » pour sculpter au centre de l\'écran.' : 'ZQSD pour voler, Espace et C pour monter et descendre, Maj pour accélérer. Clic maintenu pour sculpter, molette pour la taille, touches 1 à 6 pour l\'outil, Ctrl+Z pour annuler. Échap libère la souris pour ce panneau, F quitte le mode.';
   const code = $('tCode'), say = s => { $('tHint').textContent = s; };
   $('tSave').onclick = () => { try { localStorage.setItem('ile-terrain2', encodeIsland()); say('Île sauvegardée dans ce navigateur.'); } catch (_) { say('Sauvegarde impossible ici : utilise « Copier » pour garder le code de l\'île.'); } };
   $('tCopy').onclick = () => { const s = encodeIsland(); const fb = () => { code.style.display = 'block'; code.value = s; code.select(); say('Copie automatique refusée : sélectionne et copie le code ci-dessus.'); }; try { navigator.clipboard.writeText(s).then(() => say('Code de l\'île copié. Garde-le dans une note pour le recoller plus tard.'), fb); } catch (_) { fb(); } };
@@ -634,11 +636,13 @@ function updateTerra(dt) {
   pa.needsUpdate = true;
   const act = inp.useHeld && !G.menu;
   if (act) {
-    if (!TF.was) TF.flatH = heightAt(c.x, c.z);
+    if (!TF.was) { TF.flatH = heightAt(c.x, c.z); TF.undo.push(H.slice()); if (TF.undo.length > 20) TF.undo.shift(); }
     const a = TF.str * dt, tool = TF.tool;
     brushAt(c.x, c.z, TF.size, (k, f, i, j) => {
       if (tool === 'up') H[k] += a * f; else if (tool === 'down') H[k] -= a * f;
       else if (tool === 'flat') H[k] += (TF.flatH - H[k]) * Math.min(1, a * 0.35 * f);
+      else if (tool === 'noise') { const x = -TS / 2 + i * TC, z = -TS / 2 + j * TC; H[k] += (fbm(x * 0.06 + 31, z * 0.06 - 17, 3) - 0.45) * a * 0.9 * f; } // bosses et creux naturels
+      else if (tool === 'terrace') { const st = 2.5, tgt = Math.round(H[k] / st) * st; H[k] += (tgt - H[k]) * Math.min(1, a * 0.3 * f); } // marches tous les 2,5 m
       else if (i > 0 && j > 0 && i < TN - 1 && j < TN - 1) { const m = (H[k - 1] + H[k + 1] + H[k - TN] + H[k + TN]) / 4; H[k] += (m - H[k]) * Math.min(1, a * 0.5 * f); }
       H[k] = clamp(H[k], -16, 150);
     });
@@ -784,7 +788,7 @@ function frame(now) {
   else if (G.started && G.mode && G.mode !== 'walk') updateMode(dt);
   else if (G.started) { updatePlayer(dt); updateTerra(dt); updateInteract(); updateShots(dt); updateMoments(); }
   else { const a = G.t * 0.03 + 1.9; camera.position.set(Math.cos(a) * 340, 46, Math.sin(a) * 340); camera.lookAt(0, 30, 0); WU.uCam.value.copy(camera.position); P.pos.set(0, 0, 0); }
-  updateNearGrass(camera.position.x, camera.position.z); updateVegLOD(camera.position); updateVillage(dt); updateAssets(dt); updateArms(dt); updateFishing(dt); postArmsTurtle(); updateLighthouse(dt); updateSky(dt); applyUnder(); updateLife(dt); updateAudio(dt);
+  updateNearGrass(camera.position.x, camera.position.z); updateVegLOD(camera.position); cullFruits(camera.position); updateVillage(dt); updateAssets(dt); updateArms(dt); updateFishing(dt); postArmsTurtle(); updateLighthouse(dt); updateSky(dt); applyUnder(); updateLife(dt); updateAudio(dt);
   renderFrame();
   // résolution adaptative : si l'image ralentit, on baisse un peu la définition (puis les ombres en dernier recours)
   if (G.started) { fpsAcc += dt; if (++fpsN >= 120) { const ft = fpsAcc / fpsN; fpsAcc = 0; fpsN = 0;

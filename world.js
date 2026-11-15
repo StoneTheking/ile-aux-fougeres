@@ -652,13 +652,18 @@ function cluster(gb, r, c, rad, n, cols, o = {}) {
 // touffe d'arbre dans le style des sapins : 3 dômes empilés à bord dentelé, plus clairs vers le haut
 function puff(gb, r, c, rad, cols, o) {
   const fy = o.flat || 1, C = cols.map(lin), f = gb.wf, up = new V3(0, 1, 0), dn = new V3(0, -1, 0);
-  const tiers = [[-0.45, 1.0, 0.5, 0.62], [-0.05, 0.86, 0.5, 0.82], [0.3, 0.6, 0.48, 1.0]], n = 10;
+  const tiers = [[-0.45, 1.0, 0.5, 0.62], [-0.05, 0.86, 0.5, 0.82], [0.3, 0.6, 0.48, 1.0]], n = 8;
   for (let ti = 0; ti < tiers.length; ti++) {
     const [yo, rs, hs, br] = tiers[ti], R = rad * rs, h = rad * hs * fy, y = c.y + yo * rad * fy, a0 = r() * 6.28;
     const base = C[(r() * C.length) | 0], cTop = base.clone().multiplyScalar(br * 1.18), cEdge = base.clone().multiplyScalar(br * 0.92);
     const apex = new V3(c.x + (r() - 0.5) * R * 0.15, y + h, c.z + (r() - 0.5) * R * 0.15), und = new V3(c.x, y + h * 0.2, c.z), pts = [];
     for (let j = 0; j < n * 2; j++) { const an = a0 + j / (n * 2) * 6.2832 + (r() - 0.5) * 0.14, rr = (j % 2 ? 0.74 : 1) * R * (0.9 + r() * 0.2);
       pts.push({ p: new V3(c.x + Math.cos(an) * rr, y + (j % 2 ? 0.08 : -0.14) * R * fy, c.z + Math.sin(an) * rr), n: new V3(Math.cos(an) * 0.8, 0.6, Math.sin(an) * 0.8).normalize(), c: j % 2 ? cEdge.clone().multiplyScalar(0.86) : cEdge }); }
+    if (LOW) { // au loin : une dent sur deux et un cône simple (même silhouette, 4 fois moins de triangles)
+      const q = pts.filter((_, j) => j % 2 === 0), m = q.length;
+      for (let j = 0; j < m; j++) { const P1 = q[j], P2 = q[(j + 1) % m]; gb.triN(apex, P1.p, P2.p, cTop, P1.c, P2.c, up, P1.n, P2.n, f * 0.8, f * 1.2, f * 1.2); gb.triN(und, P2.p, P1.p, base.clone().multiplyScalar(0.42), P2.c.clone().multiplyScalar(0.55), P1.c.clone().multiplyScalar(0.55), dn, P2.n, P1.n, f * 0.8, f * 1.2, f * 1.2); }
+      continue;
+    }
     // anneau intermédiaire : la touffe devient un dôme arrondi plutôt qu'un cône
     const mid = pts.map(P => ({ p: new V3(lerp(apex.x, P.p.x, 0.62), y + h * 0.78, lerp(apex.z, P.p.z, 0.62)), n: new V3(P.n.x * 0.5, 0.86, P.n.z * 0.5).normalize(), c: cTop.clone().lerp(P.c, 0.45) }));
     for (let j = 0; j < n * 2; j++) { const k = (j + 1) % (n * 2), P1 = pts[j], P2 = pts[k], M1 = mid[j], M2 = mid[k];
@@ -811,7 +816,15 @@ function gFern(r, cA, cB, nf, len) {
 }
 function gBanana(r) {
   const g = new GB(), top = new V3(0.1, 2.3, 0);
-  limb(g, new V3(0, -0.1, 0), new V3(0.05, 1.2, 0), 0.19, 0.15, '#8a9a55', 8, 0.12); limb(g, new V3(0.05, 1.2, 0), top, 0.15, 0.1, '#9aac5c', 8, 0.12);
+  // faux-tronc : évasé à la base, fait de gaines de feuilles superposées, avec quelques feuilles sèches qui pendent
+  const tp = [], tr = [], tc = [];
+  for (let k = 0; k <= 6; k++) { const t = k / 6; tp.push(new V3(0.1 * t * t + (k === 0 ? 0 : (r() - 0.5) * 0.02), -0.15 + t * 2.45, 0)); tr.push(lerp(0.2, 0.1, Math.pow(t, 0.8)) * (k === 0 ? 1.3 : 1)); tc.push(k % 2 ? '#7c8c48' : '#8f9e55'); }
+  g.wf = 0; tube(g, tp, i => tr[i], i => tc[i], 10, 0.05, i => i / 6 * 0.25);
+  for (let k = 0; k < 5; k++) { const t = 0.08 + k * 0.17, y = -0.15 + t * 2.45, rr = lerp(0.2, 0.1, Math.pow(t, 0.8)) + 0.018, x = 0.1 * t * t;
+    g.wf = t * 0.25; g.add(new THREE.CylinderGeometry(rr * 0.97, rr * 1.12, 0.36, 10, 1, true), k % 2 ? '#9a8f55' : '#a7a060', M(x, y + 0.1, 0, 1, 1, 1, 0, r() * 6.28, 0), 0.35, 0.03); // bord de gaine
+    g.add(new THREE.CylinderGeometry(rr * 1.12, rr * 1.0, 0.03, 10, 1, true), '#7d7744', M(x, y - 0.1, 0), 0.4, 0); } // ourlet sombre sous la gaine
+  g.wf = 0.5; const pfd = t => Math.pow(Math.sin(Math.PI * (0.06 + 0.92 * t)), 0.6) * 0.7;
+  for (let i = 0; i < 2; i++) blade(g, r, new V3(0.05, 1.1 + i * 0.35, 0), i * 3.1 + r(), 1.3, 0.22, -0.9, 0.5, 5, '#7a5a30', '#a8844e', pfd);
   g.wf = 1; const pf = t => Math.pow(Math.sin(Math.PI * (0.06 + 0.92 * t)), 0.45);
   for (let i = 0; i < 8; i++) blade(g, r, top, i / 8 * 6.2832 + r() * 0.5, 2.3 + r() * 0.7, 0.42, 1.15 - (i % 3) * 0.3, 1.5 + r() * 0.4, 8, '#3f7f3c', '#7fb04a', pf);
   blade(g, r, top, 1, 1.4, 0.16, 1.5, 0.2, 5, '#8fbf55', '#b8d870', pf);
@@ -837,13 +850,13 @@ function gBroad(r) {
 }
 function gShrub(r, cols, k = 1) { // buisson cartoon : quelques touffes serrées au ras du sol
   const g = new GB(); g.wf = 0.4; const n = 4 + (r() * 2 | 0);
-  for (let i = 0; i < n; i++) { const a = r() * 6.28, d = i ? 0.35 + r() * 0.35 : 0, rad = (0.5 + r() * 0.3) * k; g.wp = r(); cluster(g, r, new V3(Math.cos(a) * d * k, rad * 0.75 + r() * 0.25, Math.sin(a) * d * k), rad, 8, cols, { flat: 0.85 }); }
+  for (let i = 0; i < n; i++) { const a = r() * 6.28, d = i ? 0.35 + r() * 0.35 : 0, rad = (0.5 + r() * 0.3) * k; g.wp = r(); puff(g, r, new V3(Math.cos(a) * d * k, rad * 0.75 + r() * 0.25, Math.sin(a) * d * k), rad, cols, { flat: 0.85 }); }
   return g.build();
 }
 function gBush(r, fr) {
   const P = { len: 0.35, rad: 0.06, segs: 1, wob: 0.4, up: 0.1, kids: [4, 2], spread: 1.0, lenK: 0.9, radK: 0.6, bark: '#5a4a38', cr: 0.5, leaves: 6, cols: ['#447a3c', '#528c42', '#386a34'], co: { ll: 1.0, lw: 0.6 }, nf: 2, flare: 1 };
   const g = new GB(), tips = growTree(g, r, P);
-  for (const t of tips) { g.wp = t.ph; g.wf = 0.6; const rad = P.cr * (0.8 + r() * 0.5); cluster(g, r, t.p, rad, P.leaves, P.cols, P.co); for (let k = 0; k < 2; k++) { const a = r() * 6.28; const fp = new V3(t.p.x + Math.cos(a) * rad * 0.5, t.p.y + rad * (0.1 + r() * 0.4), t.p.z + Math.sin(a) * rad * 0.5); fp.ph = t.ph; fr.push(fp); } }
+  for (const t of tips) { g.wp = t.ph; g.wf = 0.6; const rad = P.cr * (0.8 + r() * 0.5); puff(g, r, t.p, rad, P.cols, P.co); for (let k = 0; k < 2; k++) { const a = r() * 6.28; const fp = new V3(t.p.x + Math.cos(a) * rad * 0.5, t.p.y + rad * (0.1 + r() * 0.4), t.p.z + Math.sin(a) * rad * 0.5); fp.ph = t.ph; fr.push(fp); } }
   return g.build();
 }
 function gHibiscus(r) {
@@ -925,10 +938,12 @@ function gStar() {
   g.add(SPHL, '#ea8e4c', M(0, 0.032, 0, 0.07, 0.04, 0.07), 0.15); g.add(ICO0, '#f7c08a', M(0, 0.07, 0, 0.011), 0);
   return g.build();
 }
-function gDrift(r) {
-  const g = new GB();
-  limb(g, new V3(-1.0, 0.09, 0), new V3(-0.2, 0.15, 0.1), 0.1, 0.09, '#b9ad98', 7, 0.2); limb(g, new V3(-0.2, 0.15, 0.1), new V3(0.5, 0.12, 0.02), 0.09, 0.07, '#b0a38d', 7, 0.2); limb(g, new V3(0.5, 0.12, 0.02), new V3(1.0, 0.1, -0.2), 0.07, 0.035, '#b9ad98', 6, 0.2);
-  limb(g, new V3(0.1, 0.15, 0.08), new V3(0.4, 0.5, 0.4), 0.04, 0.015, '#a89b85', 5, 0.2); limb(g, new V3(-0.5, 0.13, 0.05), new V3(-0.65, 0.4, -0.25), 0.035, 0.012, '#a89b85', 5, 0.2);
+function gDrift(r) { // bois flotté : un tube continu fermé aux deux bouts, deux branches cassées
+  const g = new GB(), pts = [new V3(-1.0, 0.09, 0), new V3(-0.6, 0.13, 0.06), new V3(-0.2, 0.15, 0.1), new V3(0.15, 0.14, 0.07), new V3(0.5, 0.12, 0.02), new V3(1.0, 0.1, -0.2)], rads = [0.1, 0.098, 0.09, 0.082, 0.07, 0.04];
+  tube(g, pts, i => rads[i], i => i % 2 ? '#b0a38d' : '#b9ad98', 9, 0.04, () => 0);
+  g.add(SPHL, '#a89b85', M(-1.0, 0.09, 0, 0.1), 0.3, 0.05); g.add(SPHL, '#a89b85', M(1.0, 0.1, -0.2, 0.04), 0.3, 0.05);
+  limb(g, new V3(0.1, 0.13, 0.08), new V3(0.4, 0.5, 0.4), 0.04, 0.015, '#a89b85', 6, 0); limb(g, new V3(-0.5, 0.12, 0.05), new V3(-0.65, 0.4, -0.25), 0.035, 0.012, '#a89b85', 6, 0);
+  g.add(SPHL, '#a89b85', M(0.4, 0.5, 0.4, 0.016), 0.3, 0); g.add(SPHL, '#a89b85', M(-0.65, 0.4, -0.25, 0.013), 0.3, 0);
   return g.build();
 }
 function lathe(pts, seg = 12) { return new THREE.LatheGeometry(pts.map(p => new THREE.Vector2(p[0], p[1])), seg); }
@@ -1080,21 +1095,32 @@ function buildFruitMeshes(sw) {
     const aT = new Float32Array(list.length * 4); list.forEach((f, i) => { aT[i * 4] = f.tree.x; aT[i * 4 + 1] = f.tree.z; aT[i * 4 + 2] = f.aH; aT[i * 4 + 3] = f.ph; f.idx = i; });
     geo.setAttribute('aT', new THREE.InstancedBufferAttribute(aT, 4));
     const mesh = new THREE.InstancedMesh(geo, mat(Object.assign({ fruit: true, grain: 9, ga: 0.14, ds: true }, sw[type])), list.length);
-    mesh.frustumCulled = false; scene.add(mesh); FRUIT_MESH[type] = mesh;
+    mesh.frustumCulled = false; mesh.userData.list = list; scene.add(mesh); FRUIT_MESH[type] = mesh;
   }
   seatFruits();
 }
 function seatFruits() {
   for (const f of FRUITS) {
     f.x = f.tree.x + f.lx; f.z = f.tree.z + f.lz; f.y = heightAt(f.tree.x, f.tree.z) + f.ly; if (f.tree.dead) { f.picked = true; f.regrow = 1e12; }
-    _ip.set(f.x, f.y, f.z); _iq.setFromAxisAngle(_up, f.lx * 9); const s = f.picked ? 0.0001 : 1.2; _is.set(s, s, s);
-    FRUIT_MESH[f.type].setMatrixAt(f.idx, _im.compose(_ip, _iq, _is));
+    _ip.set(f.x, f.y, f.z); _iq.setFromAxisAngle(_up, f.lx * 9); _is.set(1.2, 1.2, 1.2);
+    f.m = _im.compose(_ip, _iq, _is).toArray(f.m || new Array(16));
   }
-  for (const k in FRUIT_MESH) FRUIT_MESH[k].instanceMatrix.needsUpdate = true;
+  cullFruits(null, true);
+}
+// seuls les fruits proches (non cueillis) sont envoyés à la carte graphique : ils sont détaillés, et invisibles de loin
+let _fruitN = 0, _fruitP = new V3(1e9, 0, 0);
+function cullFruits(cp, force) {
+  if (cp) { if (!force && (_fruitN++ % 12 || _fruitP.distanceToSquared(cp) < 4)) return; _fruitP.copy(cp); } else cp = _fruitP;
+  const R2 = 80 * 80;
+  for (const k in FRUIT_MESH) {
+    const mesh = FRUIT_MESH[k], A = mesh.geometry.attributes.aT, M = mesh.instanceMatrix.array; let n = 0;
+    for (const f of mesh.userData.list) { if (f.picked || !f.m) continue; const dx = f.x - cp.x, dz = f.z - cp.z; if (dx * dx + dz * dz > R2) continue;
+      M.set(f.m, n * 16); A.array[n * 4] = f.tree.x; A.array[n * 4 + 1] = f.tree.z; A.array[n * 4 + 2] = f.aH; A.array[n * 4 + 3] = f.ph; n++; }
+    mesh.count = n; mesh.visible = n > 0; mesh.instanceMatrix.needsUpdate = true; A.needsUpdate = true;
+  }
 }
 function setFruit(f, picked) {
-  f.picked = picked; _ip.set(f.x, f.y, f.z); _iq.identity(); const s = picked ? 0.0001 : 1.2; _is.set(s, s, s);
-  const m = FRUIT_MESH[f.type]; m.setMatrixAt(f.idx, _im.compose(_ip, _iq, _is)); m.instanceMatrix.needsUpdate = true;
+  f.picked = picked; cullFruits(null, true);
 }
 
 function buildFlora() {
@@ -1108,22 +1134,22 @@ function buildFlora() {
   const clear = (x, z) => { for (const o of orch) if (Math.hypot(x - o.x, z - o.z) < 27) return false; return Math.hypot(x - SPOTS.lemon.x, z - SPOTS.lemon.z) > 13 && Math.hypot(x - SPOTS.spawn.x, z - SPOTS.spawn.z) > 7 && Math.hypot(x - VILLAGE.x, z - VILLAGE.z) > 44 && Math.hypot(x - CAPE.x, z - CAPE.z) > 16; };
   const jn = (x, z) => fbm(x * 0.022 + 8, z * 0.022 + 2, 3);
   const ring = (c, n, seed, smin, smax) => { const rr = mulberry(seed), l = []; let t = 0; while (l.length < n && t++ < 1200) { const a = rr() * 6.2832, d = 4 + Math.sqrt(rr()) * 21, x = c.x + Math.cos(a) * d, z = c.z + Math.sin(a) * d, h = heightAt(x, z); if (h < 3 || slopeAt(x, z) > 0.4) continue; if (l.some(q => Math.hypot(q.x - x, q.z - z) < 6.5)) continue; l.push({ x, z, s: lerp(smin, smax, rr()), ry: rr() * 6.28 }); } return l; };
-  const treeM = mat({ ds: true, bend: 0.006, branch: 0.22, freq: 1.1, grain: 2.2, ga: 0.3, bark: 1 });
+  const treeM = mat({ ds: true, bend: 0.012, branch: 0.22, freq: 1.1, grain: 2.2, ga: 0.3, bark: 1 });
   const fa = [], fc = [], fo = [], fl = [], fb = [];
   const eA = scatter({ name: 'Pommier', seed: 1, ...tw((q, lo) => gApple(q, lo ? [] : fa)), mat: treeM, list: ring(SPOTS.apple, 13, 11, 0.7, 1.55), col: 0.26, space: 1, shadow: 1 });
   const eC = scatter({ name: 'Cerisier', seed: 2, ...tw((q, lo) => gCherry(q, lo ? [] : fc)), mat: treeM, list: ring(SPOTS.cherry, 12, 12, 0.7, 1.6), col: 0.2, space: 1, shadow: 1, tint: 0.07 });
   const eO = scatter({ name: 'Oranger', seed: 3, ...tw((q, lo) => gOrange(q, lo ? [] : fo)), mat: treeM, list: ring(SPOTS.orange, 12, 13, 0.7, 1.5), col: 0.2, space: 1, shadow: 1 });
   const eL = scatter({ name: 'Citronnier', seed: 4, geo: gLemon(r, fl), mat: treeM, list: [{ x: SPOTS.lemon.x, z: SPOTS.lemon.z, s: 1.3, ry: 1 }], col: 0.26, space: 1, shadow: 1, tint: 0 });
   addFruits(eA, 'apple', fa, 0.75); addFruits(eC, 'cherry', fc, 0.85); addFruits(eO, 'orange', fo, 0.75); addFruits(eL, 'lemon', fl, 0.9);
-  const palmM = mat({ ds: true, bend: 0.0075, branch: 0.3, freq: 1.3, grain: 2.5, bark: 1, back: 0.48 });
+  const palmM = mat({ ds: true, bend: 0.011, branch: 0.3, freq: 1.3, grain: 2.5, bark: 1, back: 0.48 });
   scatter({ name: 'Palmier', seed: 5, seaward: 1, ...tw((q, lo) => gPalm(q)), mat: palmM, count: 75, smin: 0.65, smax: 1.45, sy: [0.7, 1.45], col: 0.3, space: 5.5, shadow: 1, sink: 0.1, rule: (x, z, h, sl) => h > 1.0 && h < 3.6 && sl < 0.22 && clear(x, z) });
   scatter({ name: 'Palmier penché', seed: 31, seaward: 1, ...tw((q, lo) => gPalm(q, { h: 8.4, bend: 5.2 })), mat: palmM, count: 45, smin: 0.65, smax: 1.45, sy: [0.7, 1.45], col: 0.3, space: 6, shadow: 1, sink: 0.1, rule: (x, z, h, sl) => h > 1.0 && h < 3.6 && sl < 0.22 && clear(x, z) });
   scatter({ name: 'Palmier tordu', seed: 32, seaward: 1, ...tw((q, lo) => gPalm(q, { h: 7.2, bend: 1.4, s: -1.3, side: 1.1 })), mat: palmM, count: 40, smin: 0.65, smax: 1.45, sy: [0.7, 1.45], col: 0.3, space: 6, shadow: 1, sink: 0.1, rule: (x, z, h, sl) => h > 1.0 && h < 3.6 && sl < 0.22 && clear(x, z) });
-  scatter({ name: 'Grand arbre de jungle', seed: 6, ...tw((q, lo) => gJungle(q)), mat: mat({ ds: true, bend: 0.0028, branch: 0.3, freq: 0.9, grain: 2.2, ga: 0.3, bark: 1 }), count: 230, smin: 0.55, smax: 1.6, sy: [0.8, 1.35], col: 0.6, space: 6.5, shadow: 1, sink: 0.2, rule: (x, z, h, sl, rr) => h > 3.6 && h < 34 && sl < 0.5 && clear(x, z) && jn(x, z) > 0.42 + rr() * 0.15 });
+  scatter({ name: 'Grand arbre de jungle', seed: 6, ...tw((q, lo) => gJungle(q)), mat: mat({ ds: true, bend: 0.0058, branch: 0.3, freq: 0.9, grain: 2.2, ga: 0.3, bark: 1 }), count: 230, smin: 0.55, smax: 1.6, sy: [0.8, 1.35], col: 0.6, space: 6.5, shadow: 1, sink: 0.2, rule: (x, z, h, sl, rr) => h > 3.6 && h < 34 && sl < 0.5 && clear(x, z) && jn(x, z) > 0.42 + rr() * 0.15 });
   scatter({ name: 'Frangipanier', seed: 24, ...tw((q, lo) => gFrangi(q)), mat: treeM, count: 45, smin: 0.6, smax: 1.7, col: 0.24, space: 5, shadow: 1, rule: (x, z, h, sl) => h > 2.8 && h < 16 && sl < 0.35 && clear(x, z) && jn(x + 200, z) > 0.5 });
-  scatter({ name: 'Pin colonnaire', seed: 7, ...tw((q, lo) => gPine(q)), mat: mat({ ds: true, bend: 0.0022, branch: 0.16, freq: 1.0, grain: 2.5, bark: 1 }), count: 150, smin: 0.5, smax: 1.6, sy: [0.85, 1.45], col: 0.28, space: 4.5, shadow: 1, sink: 0.2, rule: (x, z, h, sl, rr) => h > 16 && h < 78 && sl < 0.85 && clear(x, z) && rr() < smooth(16, 30, h) });
-  scatter({ name: 'Fougère arborescente', seed: 8, ...tw((q, lo) => gTreeFern(q)), mat: mat({ ds: true, bend: 0.012, branch: 0.22, freq: 1.5, grain: 3, bark: 1 }), count: 120, smin: 0.8, smax: 1.4, col: 0.2, space: 4, shadow: 1, rule: (x, z, h, sl) => h > 4 && h < 40 && sl < 0.7 && clear(x, z) && jn(x + 50, z) > 0.45 });
-  scatter({ name: 'Bananier', seed: 25, geo: gBanana(r), mat: mat({ ds: true, bend: 0.02, branch: 0.2, freq: 1.3, grain: 3, ga: 0.2 }), count: 70, smin: 0.8, smax: 1.35, col: 0.2, space: 3.5, shadow: 1, rule: (x, z, h, sl) => h > 2.8 && h < 14 && sl < 0.35 && clear(x, z) && fbm(x * 0.03 + 40, z * 0.03 + 60, 2) > 0.56 });
+  scatter({ name: 'Pin colonnaire', seed: 7, ...tw((q, lo) => gPine(q)), mat: mat({ ds: true, bend: 0.0045, branch: 0.16, freq: 1.0, grain: 2.5, bark: 1 }), count: 150, smin: 0.5, smax: 1.6, sy: [0.85, 1.45], col: 0.28, space: 4.5, shadow: 1, sink: 0.2, rule: (x, z, h, sl, rr) => h > 16 && h < 78 && sl < 0.85 && clear(x, z) && rr() < smooth(16, 30, h) });
+  scatter({ name: 'Fougère arborescente', seed: 8, ...tw((q, lo) => gTreeFern(q)), mat: mat({ ds: true, bend: 0.018, branch: 0.22, freq: 1.5, grain: 3, bark: 1 }), count: 120, smin: 0.8, smax: 1.4, col: 0.2, space: 4, shadow: 1, rule: (x, z, h, sl) => h > 4 && h < 40 && sl < 0.7 && clear(x, z) && jn(x + 50, z) > 0.45 });
+  scatter({ name: 'Bananier', seed: 25, geo: gBanana(r), mat: mat({ ds: true, bend: 0.03, branch: 0.2, freq: 1.3, grain: 3, ga: 0.2 }), count: 70, smin: 0.8, smax: 1.35, col: 0.2, space: 3.5, shadow: 1, rule: (x, z, h, sl) => h > 2.8 && h < 14 && sl < 0.35 && clear(x, z) && fbm(x * 0.03 + 40, z * 0.03 + 60, 2) > 0.56 });
   scatter({ name: 'Bambou', seed: 9, geo: gBamboo(r), mat: mat({ ds: true, bend: 0.009, branch: 0.12, freq: 1.4, grain: 3 }), count: 50, smin: 0.8, smax: 1.3, col: 0.7, space: 5, shadow: 1, rule: (x, z, h, sl) => h > 3 && h < 18 && sl < 0.4 && clear(x, z) && fbm(x * 0.03 + 90, z * 0.03, 2) > 0.6 });
   const shrubM = mat({ ds: true, bend: 0.03, branch: 0.06, freq: 1.8, grain: 3 });
   scatter({ name: 'Buisson', maxD: 210, seed: 41, ...tw((q, lo) => gShrub(q, ['#4f9a38', '#5fae40', '#3f8a32', '#72b848'])), mat: shrubM, count: 1200, smin: 0.6, smax: 1.5, sy: [0.7, 1.2], tint: 0.14, col: 0.35, rule: (x, z, h, sl) => h > 3 && h < 45 && sl < 0.55 && clear(x, z) && fbm(x * 0.04 + 9, z * 0.04 - 3, 2) > 0.42 });
@@ -1153,8 +1179,8 @@ function buildFlora() {
   const wl = []; for (let i = 0; i < 11; i++) { const a = i / 11 * 6.2832; wl.push({ x: SPOTS.lemon.x + Math.cos(a) * 4.2, z: SPOTS.lemon.z + Math.sin(a) * 4.2, s: 0.32 + (i % 3) * 0.06, ry: i }); }
   const wg = new GB(); wg.add(ICO, '#efe9dc', M(0, 0.3, 0, 1, 0.75, 1), 0.3);
   scatter({ name: 'Pierre blanche', seed: 23, geo: wg.build(), mat: rockM, list: wl, shadow: 1, tint: 0.03 });
-  const fs = { bend: 0.006, freq: 1.1 };
-  buildFruitMeshes({ apple: fs, cherry: fs, orange: fs, lemon: fs, berry: { bend: 0.03, freq: 1.8 } });
+  const fs = { bend: 0.012, branch: 0.22, freq: 1.1 }; // mêmes réglages de vent que les vergers (treeM)
+  buildFruitMeshes({ apple: fs, cherry: fs, orange: fs, lemon: fs, berry: { bend: 0.03, branch: 0.06, freq: 1.8 } });
 }
 function reseatAll() { VEG.forEach(seat); seatFruits(); NG.cx = 1e9; }
 /* herbe dense autour du joueur : une grille de touffes qui se replace à mesure qu'on avance */
