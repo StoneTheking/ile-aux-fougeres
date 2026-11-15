@@ -43,6 +43,9 @@ function gableRoof(g, r, W, D, y, rise, col, over = 0.5) { // faîtage le long d
   const hw = W / 2 + over, hd = D / 2 + over, sl = Math.hypot(hd, rise), ang = Math.atan2(rise, hd), c = lin(col), rows = Math.max(3, Math.round(sl / 0.45));
   for (const sg of [1, -1]) for (let i = 0; i < rows; i++) { const t = (i + 0.5) / rows, zz = sg * hd * (1 - t), yy = y + rise * t; g.add(new THREE.BoxGeometry(hw * 2, 0.09, sl / rows * 1.15), c.clone().multiplyScalar(0.85 + r() * 0.25 - (i % 2) * 0.06), M(0, yy, zz, 1, 1, 1, sg * ang, 0, 0), 0.1, 0.04); }
   limb(g, new V3(-hw, y + rise + 0.04, 0), new V3(hw, y + rise + 0.04, 0), 0.1, 0.1, '#5a3c26', 6, 0.1);
+  const cd = c.clone().multiplyScalar(0.7); // rives (planches de bord) et bas de pente épaissi
+  for (const sx of [-1, 1]) for (const sg of [1, -1]) g.add(new THREE.BoxGeometry(0.12, 0.2, sl + 0.1), cd, M(sx * (hw + 0.02), y + rise / 2 + 0.04, sg * hd / 2, 1, 1, 1, sg * ang, 0, 0), 0.1, 0.02);
+  for (const sg of [1, -1]) for (let k = 0; k < Math.round(hw * 3); k++) { const x = -hw + (k + 0.5) / Math.round(hw * 3) * hw * 2; g.add(new THREE.BoxGeometry(hw * 2 / Math.round(hw * 3) * 0.96, 0.1, 0.32 + r() * 0.12), c.clone().multiplyScalar(0.78 + r() * 0.2), M(x, y - 0.02, sg * (hd - 0.08), 1, 1, 1, sg * ang + (r() - 0.5) * 0.08, 0, (r() - 0.5) * 0.05), 0.1, 0.02); }
 }
 function gableEnds(g, W, D, y, rise, col) { // pignons pleins
   const c = lin(col); for (const sx of [-1, 1]) { const x = sx * W / 2, a = new V3(x, y, -D / 2), b = new V3(x, y, D / 2), t = new V3(x, y + rise, 0); g.triN(a, b, t, c, c, c.clone().multiplyScalar(1.05), new V3(sx, 0.2, 0).normalize()); g.triN(b, a, t, c, c, c, new V3(-sx, 0.2, 0).normalize()); }
@@ -67,16 +70,42 @@ function signTex(text, bg, fg) {
 }
 
 /* ---------- éléments plaçables (aussi dans l'éditeur) ---------- */
-function gHouse(r, wall, roof, trim) {
-  const g = new GB(), W = 5, D = 4.4, H = 2.7;
-  boxAt(g, '#8f8a80', 0, 0.12, 0, W + 0.3, 0.5, D + 0.3, 0, 0.3, 0.12);
+function stones(g, r, pts, sz, cols) { for (const [x, y, z] of pts) g.add(ICO0, cols[(r() * cols.length) | 0], M(x, y, z, sz * (0.8 + r() * 0.5), sz * (0.6 + r() * 0.3), sz * (0.8 + r() * 0.5), r(), r() * 6, r()), 0.35, 0.12); }
+function gHouse(r, wall, roof, trim) { // cabane de pirates : soubassement de pierres, bardeaux épais, porche, croisillons, jardinières
+  const g = new GB(), W = 5, D = 4.4, H = 2.7, SC = ['#8f8a80', '#7d776d', '#a39a8c', '#6e6a62'];
+  // soubassement : bloc sombre habillé de pierres irrégulières
+  boxAt(g, '#6a655c', 0, 0.12, 0, W + 0.2, 0.5, D + 0.2, 0, 0.3, 0.06);
+  const sp = []; for (let k = 0; k < 14; k++) { const t = (k + 0.5) / 14; sp.push([-W / 2 - 0.1 + t * (W + 0.2), 0.18 + r() * 0.12, D / 2 + 0.12], [-W / 2 - 0.1 + t * (W + 0.2), 0.18 + r() * 0.12, -D / 2 - 0.12]); }
+  for (let k = 0; k < 12; k++) { const t = (k + 0.5) / 12; sp.push([W / 2 + 0.12, 0.18 + r() * 0.12, -D / 2 - 0.1 + t * (D + 0.2)], [-W / 2 - 0.12, 0.18 + r() * 0.12, -D / 2 - 0.1 + t * (D + 0.2)]); }
+  stones(g, r, sp, 0.2, SC);
+  // murs de planches
   plankWall(g, r, -W / 2, W / 2, 0.35, H, D / 2, wall, { hole: [-0.5, 0.5, 0.3, 2.1] }); plankWall(g, r, -W / 2, W / 2, 0.35, H, -D / 2, wall);
   for (const sx of [-1, 1]) { const gs = new GB(); plankWall(gs, r, -D / 2, D / 2, 0.35, H, 0, wall); g.addGB(gs, M(sx * W / 2, 0, 0, 1, 1, 1, 0, Math.PI / 2, 0)); }
-  for (const [x, z] of [[-W / 2, -D / 2], [W / 2, -D / 2], [-W / 2, D / 2], [W / 2, D / 2]]) boxAt(g, trim, x, H / 2 + 0.2, z, 0.2, H + 0.1, 0.2);
-  boxAt(g, '#5a3a22', 0, 1.2, D / 2 + 0.02, 0.95, 1.8, 0.06); boxAt(g, trim, 0, 2.15, D / 2 + 0.04, 1.2, 0.12, 0.1); g.add(SPHL, '#d9b04a', M(0.32, 1.15, D / 2 + 0.07, 0.04), 0);
-  windowAt(g, -1.55, 1.1, D / 2 + 0.03, 0.7, 0.75, trim); shutters(g, -1.55, 1.1, D / 2 + 0.03, 0.7, 0.75, trim); windowAt(g, 1.55, 1.1, D / 2 + 0.03, 0.7, 0.75, trim); shutters(g, 1.55, 1.1, D / 2 + 0.03, 0.7, 0.75, trim);
-  gableEnds(g, W, D, H, 1.6, wall); gableRoof(g, r, W, D, H, 1.6, roof, 0.45);
-  boxAt(g, '#7a6e64', 1.4, H + 1.6, -0.6, 0.5, 1.4, 0.5, 0, 0.3, 0.1);
+  // poutres d'angle, sablière et croisillons sur les pignons
+  for (const [x, z] of [[-W / 2, -D / 2], [W / 2, -D / 2], [-W / 2, D / 2], [W / 2, D / 2]]) boxAt(g, trim, x, H / 2 + 0.2, z, 0.28, H + 0.15, 0.28);
+  for (const z of [-D / 2, D / 2]) boxAt(g, trim, 0, H + 0.02, z + Math.sign(z) * 0.06, W + 0.3, 0.2, 0.16);
+  for (const sx of [-1, 1]) { const x = sx * (W / 2 + 0.07); limb(g, new V3(x, 0.5, -D / 2 + 0.2), new V3(x, H - 0.1, -0.15), 0.06, 0.06, trim, 4, 0); limb(g, new V3(x, 0.5, D / 2 - 0.2), new V3(x, H - 0.1, 0.15), 0.06, 0.06, trim, 4, 0); boxAt(g, trim, x, 1.45, 0, 0.12, 0.14, D - 0.3); }
+  // porte : chambranle, planches verticales, auvent sur consoles, marches et lanterne
+  boxAt(g, '#5a3a22', 0, 1.2, D / 2 + 0.02, 0.95, 1.8, 0.06); for (let k = -1; k <= 1; k++) boxAt(g, '#4a2f1b', k * 0.3, 1.2, D / 2 + 0.06, 0.03, 1.7, 0.02, 0, 0, 0);
+  boxAt(g, '#3a2414', 0, 0.75, D / 2 + 0.07, 0.8, 0.08, 0.03); boxAt(g, '#3a2414', 0, 1.65, D / 2 + 0.07, 0.8, 0.08, 0.03);
+  for (const sx of [-1, 1]) boxAt(g, trim, sx * 0.55, 1.2, D / 2 + 0.06, 0.14, 1.95, 0.14); boxAt(g, trim, 0, 2.2, D / 2 + 0.06, 1.3, 0.14, 0.14);
+  g.add(SPHL, '#d9b04a', M(0.32, 1.15, D / 2 + 0.09, 0.045), 0);
+  const aw = new GB(); gableRoof(aw, r, 1.0, 0.9, 0, 0.32, roof, 0.12); g.addGB(aw, M(0, 2.45, D / 2 + 0.5));
+  for (const sx of [-1, 1]) limb(g, new V3(sx * 0.6, 2.05, D / 2 + 0.05), new V3(sx * 0.6, 2.45, D / 2 + 0.75), 0.04, 0.04, trim, 4, 0);
+  boxAt(g, '#9a7a55', 0, 0.33, D / 2 + 0.45, 1.3, 0.16, 0.5); boxAt(g, '#8f7050', 0, 0.16, D / 2 + 0.75, 1.4, 0.16, 0.45);
+  limb(g, new V3(0.85, 1.55, D / 2 + 0.06), new V3(0.85, 1.55, D / 2 + 0.32), 0.025, 0.025, '#2e2a26', 4, 0); lampGlass(g, 0.85, 1.32, D / 2 + 0.34, 0.9);
+  // fenêtres, volets et jardinières fleuries
+  for (const wx of [-1.55, 1.55]) {
+    windowAt(g, wx, 1.1, D / 2 + 0.03, 0.7, 0.75, trim); shutters(g, wx, 1.1, D / 2 + 0.03, 0.7, 0.75, trim);
+    boxAt(g, '#7a5232', wx, 0.98, D / 2 + 0.2, 0.95, 0.2, 0.26);
+    for (let k = 0; k < 6; k++) { const fx = wx - 0.38 + k * 0.15 + (r() - 0.5) * 0.05; g.add(SPH, '#3f7f32', M(fx, 1.12, D / 2 + 0.2, 0.09, 0.07, 0.09), 0.3, 0); g.add(SPH, ['#e04a5a', '#f2c230', '#f07aa8', '#ffffff'][(r() * 4) | 0], M(fx, 1.18 + r() * 0.04, D / 2 + 0.24, 0.05), 0.2, 0); }
+  }
+  windowAt(g, 0, 1.1, -D / 2 - 0.03, 0.7, 0.75, trim);
+  // toit : bardeaux épais avec rives et faîtage
+  gableEnds(g, W, D, H, 1.6, wall); gableRoof(g, r, W + 0.2, D, H, 1.6, roof, 0.6);
+  // cheminée en pierres empilées, un peu de travers
+  const cx = 1.4, cz = -0.6, cs = []; for (let k = 0; k < 7; k++) for (const [ox, oz] of [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]]) cs.push([cx + ox + k * 0.01, H + 0.7 + k * 0.24, cz + oz]);
+  boxAt(g, '#6e6a62', cx + 0.03, H + 1.45, cz, 0.48, 1.7, 0.48, 0, 0.3, 0.04); stones(g, r, cs, 0.17, SC); boxAt(g, '#5a5650', cx + 0.07, H + 2.4, cz, 0.6, 0.12, 0.6);
   return g.build();
 }
 function gBarrelP(r) { const g = new GB(); barrel(g, 0, 0, 0); return g.build(); }
@@ -117,27 +146,34 @@ function part(build) { const g = new GB(); build(g); return new THREE.Mesh(g.bui
 function makeNPC(o) {
   const root = new THREE.Group(), hips = new THREE.Group(), sk = o.skin || '#e0a07a', sh = o.shirt || '#d8d0bc', pa = o.pants || '#3f4a5a', bo = '#3a2618', hs = o.h || 1;
   root.add(hips); hips.position.y = 0.9 * hs;
-  const leg = sx => { const p = new THREE.Group(); p.position.set(sx * 0.11, 0, 0); p.add(part(g => { tube(g, [new V3(0, 0.02, 0), new V3(0, -0.45 * hs, 0.02), new V3(0, -0.78 * hs, 0)], i => [0.1, 0.085, 0.075][i], pa, 10, 0.05, () => 0); g.add(rbox(0.085, 0.07, 0.15), bo, M(0, -0.82 * hs, 0.05), 0.3); if (o.peg && sx > 0) g.add(new THREE.CylinderGeometry(0.03, 0.04, 0.3, 8), '#8a6a44', M(0, -0.75 * hs, 0), 0.2); })); hips.add(p); return p; };
+  const leg = sx => { const p = new THREE.Group(); p.position.set(sx * 0.11, 0, 0); p.add(part(g => { tube(g, [new V3(0, 0.04, 0), new V3(0, -0.2 * hs, 0.01), new V3(0, -0.42 * hs, 0.03), new V3(0, -0.6 * hs, 0.0)], i => [0.105, 0.092, 0.075, 0.068][i], pa, 10, 0.03, () => 0); /* cuisse, genou, mollet */
+    tube(g, [new V3(0, -0.56 * hs, 0), new V3(0, -0.8 * hs, 0.005)], i => [0.078, 0.07][i], bo, 10, 0.02, () => 0); g.add(new THREE.CylinderGeometry(0.088, 0.082, 0.06, 10), '#4a3020', M(0, -0.56 * hs, 0), 0.2); /* tige de botte et revers */
+    g.add(rbox(0.075, 0.06, 0.13), bo, M(0, -0.83 * hs, 0.06), 0.3); g.add(new THREE.BoxGeometry(0.16, 0.025, 0.29), '#241810', M(0, -0.87 * hs, 0.06), 0.2); /* pied et semelle */ if (o.peg && sx > 0) g.add(new THREE.CylinderGeometry(0.03, 0.04, 0.3, 8), '#8a6a44', M(0, -0.75 * hs, 0), 0.2); })); hips.add(p); return p; };
   const legL = leg(-1), legR = leg(1);
   const torso = new THREE.Group(); hips.add(torso);
   const bl = o.belly || 1;
   torso.add(part(g => {
-    tube(g, [new V3(0, -0.05, 0), new V3(0, 0.15, 0.02 * bl), new V3(0, 0.38, 0.01), new V3(0, 0.56, 0)], i => [0.2, 0.22 * bl, 0.23, 0.19][i], sh, 14, 0.05, () => 0);
+    tube(g, [new V3(0, -0.05, 0), new V3(0, 0.14, 0.02 * bl), new V3(0, 0.34, 0.025), new V3(0, 0.5, 0.0), new V3(0, 0.58, -0.01)], i => [0.19, 0.2 * bl, 0.23, 0.25, 0.13][i], sh, 14, 0.03, () => 0);
+    for (const sx of [-1, 1]) g.add(SPH, sh, M(sx * 0.18, 0.49, -0.01, 0.095, 0.07, 0.095), 0.3); /* épaules */
+    for (const sx of [-1, 1]) g.add(new THREE.BoxGeometry(0.11, 0.025, 0.02), sh, M(sx * 0.05, 0.56, 0.115, 1, 1, 1, 0.3, 0, sx * 0.55), 0.15); /* col */
     if (o.vest) { tube(g, [new V3(0, 0.0, 0), new V3(0, 0.3, 0.01), new V3(0, 0.55, 0)], i => [0.215 * bl, 0.24, 0.2][i] * 1.02, o.vest, 14, 0.05, () => 0); }
     g.add(new THREE.TorusGeometry(0.205 * bl, 0.035, 6, 18), '#3a2618', M(0, 0.0, 0, 1, 1, 1, Math.PI / 2, 0, 0), 0.2); boxAt(g, '#d9b04a', 0, 0, 0.21 * bl, 0.09, 0.07, 0.03, 0, 0.1, 0);
     if (o.sash) g.add(new THREE.TorusGeometry(0.215 * bl, 0.045, 6, 18), o.sash, M(0, 0.07, 0, 1, 1, 1, Math.PI / 2, 0, 0), 0.2);
     if (o.apron) g.add(rbox(0.2, 0.3, 0.03), o.apron, M(0, -0.1, 0.2 * bl), 0.2);
   }));
-  const head = new THREE.Group(); head.position.y = 0.62; torso.add(head);
+  const head = new THREE.Group(); head.position.y = 0.66; head.scale.setScalar(0.84); torso.add(head); /* proportions plus réalistes : tête plus petite */
   head.add(part(g => {
-    tube(g, [new V3(0, -0.06, 0), new V3(0, 0.06, 0)], 0.075, sk, 10, 0, () => 0);
-    g.add(SPH, sk, M(0, 0.2, 0, 0.2, 0.22, 0.19), 0.3);
-    g.add(SPH, o.nose || '#d48a68', M(0, 0.17, 0.19, 0.055, 0.06, 0.07), 0.3);
-    for (const sx of [-1, 1]) { g.add(SPHL, '#ffffff', M(sx * 0.075, 0.24, 0.16, 0.042, 0.048, 0.03), 0); if (!(o.patch && sx > 0)) g.add(SPHL, '#1e1a18', M(sx * 0.075, 0.24, 0.185, 0.022, 0.028, 0.015), 0); g.add(new THREE.BoxGeometry(0.09, 0.022, 0.03), o.hair || '#3a2a20', M(sx * 0.078, 0.3, 0.18, 1, 1, 1, 0, 0, sx * -0.15), 0.1); g.add(SPH, sk, M(sx * 0.19, 0.2, 0, 0.035, 0.055, 0.03), 0.3); }
+    tube(g, [new V3(0, -0.14, 0), new V3(0, 0.06, 0.01)], i => [0.085, 0.075][i], sk, 10, 0, () => 0);
+    g.add(SPH, sk, M(0, 0.2, 0, 0.18, 0.22, 0.19), 0.3); g.add(SPH, sk, M(0, 0.1, 0.06, 0.14, 0.1, 0.13), 0.3); /* crâne et mâchoire */
+    g.add(SPH, o.nose || '#d48a68', M(0, 0.175, 0.185, 0.032, 0.05, 0.05, 0.25, 0, 0), 0.3); g.add(SPH, o.nose || '#d48a68', M(0, 0.15, 0.2, 0.034, 0.025, 0.03), 0.3);
+    for (const sx of [-1, 1]) { g.add(SPHL, '#f4efe6', M(sx * 0.068, 0.235, 0.158, 0.036, 0.03, 0.025), 0); if (!(o.patch && sx > 0)) { g.add(SPHL, o.eyes || '#5a4030', M(sx * 0.068, 0.235, 0.178, 0.019, 0.021, 0.01), 0); g.add(SPHL, '#141210', M(sx * 0.068, 0.235, 0.186, 0.009, 0.01, 0.006), 0); g.add(SPHL, '#ffffff', M(sx * 0.064, 0.242, 0.19, 0.004), 0); }
+      g.add(SPH, sk, M(sx * 0.068, 0.252, 0.163, 0.042, 0.016, 0.028, -0.2, 0, 0), 0.2); /* paupière */
+      g.add(new THREE.BoxGeometry(0.075, 0.018, 0.025), o.hair || '#3a2a20', M(sx * 0.07, 0.285, 0.175, 1, 1, 1, 0, 0, sx * -0.12), 0.1); /* sourcil */
+      g.add(SPH, sk, M(sx * 0.178, 0.2, -0.01, 0.03, 0.05, 0.035), 0.3); g.add(SPH, lin(sk).multiplyScalar(0.8), M(sx * 0.185, 0.2, -0.002, 0.014, 0.03, 0.02), 0.2); } /* oreille */
     if (o.patch) { g.add(SPHL, '#1a1a1a', M(0.075, 0.24, 0.175, 0.055, 0.055, 0.025), 0); g.add(new THREE.TorusGeometry(0.2, 0.008, 4, 20), '#1a1a1a', M(0, 0.26, 0, 1, 1, 1, 0.35, 0, -0.2), 0); }
     if (o.beard) g.add(SPH, o.beard, M(0, 0.08, 0.08, 0.17, 0.16, 0.14), 0.3);
     if (o.mous) { for (const sx of [-1, 1]) g.add(SPHL, o.mous, M(sx * 0.05, 0.12, 0.2, 0.06, 0.022, 0.025, 0, 0, sx * 0.3), 0.1); }
-    g.add(new THREE.BoxGeometry(0.07, 0.015, 0.02), '#8a3a32', M(0, 0.1, 0.18), 0);
+    g.add(SPH, '#a8584c', M(0, 0.105, 0.172, 0.04, 0.011, 0.015), 0.1); g.add(SPH, '#b8665a', M(0, 0.092, 0.17, 0.033, 0.012, 0.015), 0.1); /* lèvres */
     if (o.hair && o.hat !== 'bandana') g.add(SPH, o.hair, M(0, 0.24, -0.04, 0.21, 0.2, 0.19), 0.3);
     if (o.bun) g.add(SPH, o.hair, M(0, 0.36, -0.14, 0.09), 0.3);
     if (o.hat === 'tricorne') { g.add(SPH, o.hatc || '#2a2420', M(0, 0.36, 0, 0.19, 0.12, 0.19), 0.3); for (let i = 0; i < 3; i++) { const a = i * 2.094 + 1.57; g.add(new THREE.BoxGeometry(0.42, 0.13, 0.04), o.hatc || '#2a2420', M(Math.cos(a) * 0.17, 0.38, Math.sin(a) * 0.17, 1, 1, 1, -0.5, -a + 1.57, 0), 0.2); } g.add(new THREE.BoxGeometry(0.4, 0.02, 0.03), '#d9b04a', M(0, 0.32, 0.27), 0); }
@@ -146,7 +182,9 @@ function makeNPC(o) {
     else if (o.hat === 'straw') { g.add(SPH, '#d9be6a', M(0, 0.33, 0, 0.18, 0.12, 0.18), 0.3); g.add(new THREE.CylinderGeometry(0.36, 0.36, 0.025, 18), '#e2c878', M(0, 0.32, 0), 0.2); g.add(new THREE.TorusGeometry(0.18, 0.02, 5, 16), '#a8432f', M(0, 0.34, 0, 1, 1, 1, Math.PI / 2, 0, 0), 0); }
     if (o.earring) g.add(new THREE.TorusGeometry(0.025, 0.006, 4, 10), '#e8c84a', M(-0.19, 0.13, 0.01), 0);
   }));
-  const arm = sx => { const p = new THREE.Group(); p.position.set(sx * 0.27, 0.5, 0); p.add(part(g => { g.add(SPH, sh, M(0, 0, 0, 0.1), 0.3); tube(g, [new V3(0, 0, 0), new V3(sx * 0.03, -0.27, 0.01), new V3(sx * 0.02, -0.52, 0.03)], i => [0.085, 0.07, 0.06][i], i => i < 2 ? (o.vest && !o.sleeves ? sk : sh) : sk, 10, 0.05, () => 0); g.add(SPH, sk, M(sx * 0.02, -0.57, 0.03, 0.065, 0.075, 0.06), 0.3); if (o.hook && sx > 0) { g.add(new THREE.TorusGeometry(0.05, 0.012, 5, 10, 4.5), '#b8b8b8', M(sx * 0.02, -0.66, 0.03), 0.2); } })); torso.add(p); return p; };
+  const arm = sx => { const p = new THREE.Group(); p.position.set(sx * 0.27, 0.5, 0); p.add(part(g => { g.add(SPH, sh, M(0, 0, 0, 0.1), 0.3); tube(g, [new V3(0, 0, 0), new V3(sx * 0.025, -0.15, 0.0), new V3(sx * 0.03, -0.28, 0.0), new V3(sx * 0.025, -0.42, 0.03), new V3(sx * 0.02, -0.53, 0.04)], i => [0.08, 0.072, 0.062, 0.058, 0.048][i], i => i < 3 ? (o.vest && !o.sleeves ? sk : sh) : sk, 10, 0.03, () => 0); /* épaule, coude, avant-bras, poignet */
+      if (!(o.vest && !o.sleeves)) g.add(new THREE.CylinderGeometry(0.066, 0.07, 0.05, 10), lin(sh).multiplyScalar(0.85), M(sx * 0.03, -0.3, 0.005), 0.2); /* manche retroussée */
+      g.add(rbox(0.045, 0.06, 0.03), sk, M(sx * 0.02, -0.59, 0.045), 0.3); g.add(SPH, sk, M(sx * 0.02 - sx * 0.035, -0.57, 0.07, 0.018, 0.035, 0.018, 0.4, 0, -sx * 0.4), 0.3); /* main et pouce */ if (o.hook && sx > 0) { g.add(new THREE.TorusGeometry(0.05, 0.012, 5, 10, 4.5), '#b8b8b8', M(sx * 0.02, -0.66, 0.03), 0.2); } })); torso.add(p); return p; };
   const armL = arm(-1), armR = arm(1);
   root.traverse(m => { if (m.isMesh) { m.castShadow = true; } });
   scene.add(root);

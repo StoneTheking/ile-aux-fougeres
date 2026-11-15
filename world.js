@@ -458,7 +458,8 @@ function buildSky() {
     uniforms: SU, side: THREE.BackSide, depthWrite: false, fog: false, transparent: true,
     vertexShader: 'varying vec3 vD; void main(){ vD = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `uniform vec3 uTop, uHor, uMid, uGlow, uSun, uCloudLit, uCloudShade, uLightD, uSunP, uMoonP, uDiscC; uniform float uGlowK, uCover, uMoonK, uLitK; uniform vec2 uOff; uniform sampler2D uNoise; varying vec3 vD;
-float cn(vec2 p){ return texture2D(uNoise, p * 0.11).r * 0.55 + texture2D(uNoise, p * 0.29 + vec2(0.37, 0.11)).g * 0.3 + texture2D(uNoise, p * 0.83 + vec2(0.71, 0.53)).b * 0.15; }
+// nuages : grandes masses, bosses et détails glissent à des vitesses différentes, ils se déforment en avançant
+float cn(vec2 p, vec2 o){ return texture2D(uNoise, (p + o) * 0.11).r * 0.55 + texture2D(uNoise, (p + o * 1.45) * 0.29 + vec2(0.37, 0.11)).g * 0.3 + texture2D(uNoise, (p + o * 2.1) * 0.83 + vec2(0.71, 0.53)).b * 0.15; }
 void main(){ vec3 d = normalize(vD); float y = max(d.y, 0.0);
   vec3 c = mix(uHor, uMid, smoothstep(0.0, 0.22, y)); c = mix(c, uTop, smoothstep(0.12, 0.75, y));
   float s = max(dot(d, uSun), 0.0);
@@ -468,9 +469,9 @@ void main(){ vec3 d = normalize(vD); float y = max(d.y, 0.0);
   float clr = above; float mv = dot(d, uMoonP); clr *= 1.0 - smoothstep(0.9993, 0.9996, mv); c = mix(c, vec3(0.93, 0.95, 1.0), smoothstep(0.99965, 0.99978, mv) * uMoonK * above); c += vec3(0.5, 0.6, 0.9) * smoothstep(0.992, 1.0, mv) * 0.15 * uMoonK * above;
   if(d.y > 0.012){
     // nuages peints à plat sur la voûte : formes nettes, bord éclairé côté soleil, base ombrée
-    vec2 uv = d.xz / (d.y + 0.17) * 0.9 + uOff;
-    float n = cn(uv), m = smoothstep(uCover, uCover + 0.06, n);
-    float n2 = cn(uv + normalize(uLightD.xz + vec2(1e-4)) * 0.14);
+    vec2 uv = d.xz / (d.y + 0.17) * 0.9;
+    float n = cn(uv, uOff), m = smoothstep(uCover, uCover + 0.06, n);
+    float n2 = cn(uv + normalize(uLightD.xz + vec2(1e-4)) * 0.14, uOff);
     float lit = clamp(0.5 + (n - n2) * 8.0, 0.0, 1.0); lit = mix(0.5, smoothstep(0.15, 0.85, lit), uLitK);
     vec3 cc = mix(uCloudShade, uCloudLit, lit);
     cc = mix(cc, mix(uCloudShade, uCloudLit, 0.5), smoothstep(uCover + 0.05, uCover + 0.3, n) * 0.5);
@@ -478,14 +479,14 @@ void main(){ vec3 d = normalize(vD); float y = max(d.y, 0.0);
     { float rim = 1.0 - smoothstep(uCover, uCover + 0.13, n); cc += uGlow * uGlowK * (pow(s, 3.0) * rim * 0.95 + pow(s, 10.0) * 0.45); } // contre-jour : bords fins dorés côté soleil
     cc = mix(cc, uHor, smoothstep(0.3, 0.0, y) * 0.65);
     float a = m * smoothstep(0.012, 0.1, d.y) * 0.97;
-    float ci = smoothstep(0.6, 0.82, texture2D(uNoise, uv * vec2(0.045, 0.2) + uOff * 0.4 + 0.3).g) * 0.3 * smoothstep(0.08, 0.4, d.y);
+    float ci = smoothstep(0.6, 0.82, texture2D(uNoise, (uv + uOff * 0.55) * vec2(0.045, 0.2) + 0.3).g) * 0.3 * smoothstep(0.08, 0.4, d.y);
     clr *= 1.0 - max(a, ci * 2.2);
     c = mix(c, uCloudLit, ci * (1.0 - a));
     c = mix(c, cc, a);
     // deuxième couche de petits nuages, plus basse et plus rapide : on voit le ciel bouger partout
-    vec2 uv2 = d.xz / (d.y + 0.1) * 1.6 + uOff * 2.4 + vec2(3.7, 1.3);
-    float n3 = cn(uv2), m2 = smoothstep(uCover + 0.08, uCover + 0.13, n3) * smoothstep(0.02, 0.12, d.y) * (1.0 - a);
-    float n4 = cn(uv2 + normalize(uLightD.xz + vec2(1e-4)) * 0.12), lit2 = mix(0.5, smoothstep(0.15, 0.85, clamp(0.5 + (n3 - n4) * 8.0, 0.0, 1.0)), uLitK);
+    vec2 uv2 = d.xz / (d.y + 0.1) * 1.6 + vec2(3.7, 1.3);
+    float n3 = cn(uv2, uOff * 2.4), m2 = smoothstep(uCover + 0.08, uCover + 0.13, n3) * smoothstep(0.02, 0.12, d.y) * (1.0 - a);
+    float n4 = cn(uv2 + normalize(uLightD.xz + vec2(1e-4)) * 0.12, uOff * 2.4), lit2 = mix(0.5, smoothstep(0.15, 0.85, clamp(0.5 + (n3 - n4) * 8.0, 0.0, 1.0)), uLitK);
     vec3 cc2 = mix(uCloudShade, uCloudLit, lit2); cc2 += uGlow * uGlowK * (pow(s, 3.0) * (1.0 - smoothstep(uCover + 0.08, uCover + 0.2, n3)) * 0.9 + pow(s, 6.0) * 0.35); cc2 = mix(cc2, uHor, smoothstep(0.3, 0.0, y) * 0.6);
     clr *= 1.0 - m2; c = mix(c, cc2, m2 * 0.95);
   }
@@ -1102,7 +1103,7 @@ function buildFruitMeshes(sw) {
 function seatFruits() {
   for (const f of FRUITS) {
     f.x = f.tree.x + f.lx; f.z = f.tree.z + f.lz; f.y = heightAt(f.tree.x, f.tree.z) + f.ly; if (f.tree.dead) { f.picked = true; f.regrow = 1e12; }
-    _ip.set(f.x, f.y, f.z); _iq.setFromAxisAngle(_up, f.lx * 9); _is.set(1.2, 1.2, 1.2);
+    _ip.set(f.x, f.y, f.z); _iq.setFromAxisAngle(_up, f.lx * 9); _is.set(0.95, 0.95, 0.95);
     f.m = _im.compose(_ip, _iq, _is).toArray(f.m || new Array(16));
   }
   cullFruits(null, true);
