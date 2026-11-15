@@ -102,10 +102,26 @@ function gHouse(r, wall, roof, trim) { // cabane de pirates : soubassement de pi
   }
   windowAt(g, 0, 1.1, -D / 2 - 0.03, 0.7, 0.75, trim);
   // toit : bardeaux épais avec rives et faîtage
-  gableEnds(g, W, D, H, 1.6, wall); gableRoof(g, r, W + 0.2, D, H, 1.6, roof, 0.6);
+  // toit pentu, débordant et un peu de travers, avec une lucarne : la silhouette n'est plus un cube
+  const rise = 1.9 + r() * 0.5, up = new GB(), hd = D / 2 + 0.75;
+  gableEnds(up, W, D, H, rise, wall); gableRoof(up, r, W + 0.3, D, H, rise, roof, 0.75);
+  { const dx = r() < 0.5 ? -1.15 : 1.15, dz = 1.05, yb = H + rise * (1 - dz / hd) - 0.15, dm = new GB();
+    boxAt(dm, wall, 0, 0.4, -0.45, 1.0, 0.85, 1.3); plankWall(dm, r, -0.5, 0.5, 0.0, 0.85, 0.22, wall); windowAt(dm, 0, 0.18, 0.25, 0.45, 0.45, trim);
+    gableEnds(dm, 1.0, 1.3, 0.85, 0.45, wall); const dr = new GB(); gableRoof(dr, r, 1.3, 1.3, 0.85, 0.45, roof, 0.18); dm.addGB(dr, M(0, 0, 0, 1, 1, 1, 0, 0, 0));
+    up.addGB(dm, M(dx, yb, dz - 0.45, 1, 1, 1, 0, Math.PI / 2, 0)); }
+  g.addGB(up, M(0, 0, 0, 1, 1, 1, 0, 0, (r() - 0.5) * 0.05));
+  // appentis sur un côté : murets de planches et toit à une pente
+  { const sx = r() < 0.5 ? -1 : 1, aw = 1.7, ad = 3.0, ah = 1.9, a = new GB();
+    plankWall(a, r, 0, aw, 0.3, ah, ad / 2, wall, { hole: [0.45, 1.15, 0.3, 1.6] }); plankWall(a, r, 0, aw, 0.3, ah, -ad / 2, wall);
+    { const sd = new GB(); plankWall(sd, r, -ad / 2, ad / 2, 0.3, ah, 0, wall); a.addGB(sd, M(aw, 0, 0, 1, 1, 1, 0, Math.PI / 2, 0)); }
+    boxAt(a, '#5a3a22', 0.8, 0.95, ad / 2 + 0.02, 0.68, 1.3, 0.05); boxAt(a, '#6a655c', aw / 2, 0.12, 0, aw + 0.2, 0.36, ad + 0.2, 0, 0.3, 0.06);
+    const yTop = H - 0.1, yLow = ah + 0.15, sl = Math.hypot(aw + 0.5, yTop - yLow), ang = Math.atan2(yTop - yLow, aw + 0.5), c = lin(roof);
+    for (let i = 0; i < 4; i++) { const t = (i + 0.5) / 4; a.add(new THREE.BoxGeometry(sl / 4 * 1.15, 0.09, ad + 0.5), c.clone().multiplyScalar(0.82 + r() * 0.22), M(t * (aw + 0.5) - 0.05, yTop - (yTop - yLow) * t + 0.1, 0, 1, 1, 1, 0, 0, -ang), 0.1, 0.03); }
+    for (const z of [-ad / 2, ad / 2]) boxAt(a, trim, aw, ah / 2 + 0.1, z, 0.2, ah + 0.2, 0.2);
+    g.addGB(a, sx > 0 ? M(W / 2, 0, 0) : M(-W / 2, 0, 0, 1, 1, 1, 0, Math.PI, 0)); }
   // cheminée en pierres empilées, un peu de travers
-  const cx = 1.4, cz = -0.6, cs = []; for (let k = 0; k < 7; k++) for (const [ox, oz] of [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]]) cs.push([cx + ox + k * 0.01, H + 0.7 + k * 0.24, cz + oz]);
-  boxAt(g, '#6e6a62', cx + 0.03, H + 1.45, cz, 0.48, 1.7, 0.48, 0, 0.3, 0.04); stones(g, r, cs, 0.17, SC); boxAt(g, '#5a5650', cx + 0.07, H + 2.4, cz, 0.6, 0.12, 0.6);
+  const cx = 1.4, cz = -0.6, cs = []; for (let k = 0; k < 9; k++) for (const [ox, oz] of [[-0.17, -0.17], [0.17, -0.17], [-0.17, 0.17], [0.17, 0.17]]) cs.push([cx + ox + k * 0.01, H + 0.7 + k * 0.24, cz + oz]);
+  boxAt(g, '#6e6a62', cx + 0.04, H + 1.7, cz, 0.48, 2.2, 0.48, 0, 0.3, 0.04); stones(g, r, cs, 0.17, SC); boxAt(g, '#5a5650', cx + 0.09, H + 2.9, cz, 0.6, 0.12, 0.6);
   return g.build();
 }
 function gBarrelP(r) { const g = new GB(); barrel(g, 0, 0, 0); return g.build(); }
@@ -344,7 +360,7 @@ function buildVillage() {
   const facing = (u, v, tu, tv) => { const a = vp(u, v), b = vp(tu, tv); return Math.atan2(b.x - a.x, b.z - a.z); };
   const L = (u, v, s = 1, face = null) => { const p = vp(u, v); return { x: p.x, z: p.z, s, ry: face === null ? r() * 6.28 : face, sy: 1 }; };
   const homes = [[-3, -17, '#4f9aa0', '#c9a55a', '#2f5a5e'], [8, -21, '#d9a441', '#a8432f', '#7a4a20'], [-4, 18, '#c0503a', '#c9a55a', '#6a2a1e'], [7, 22, '#e8dcc0', '#3f6a8a', '#5a4a3a'], [-22, -17, '#7a9a5a', '#a8432f', '#3e5a2a'], [-24, 17, '#d9a441', '#3f6a8a', '#7a4a20']];
-  homes.forEach((hh, i) => scatter({ name: 'Maison ' + (i + 1), key: 'house' + i, geo: gHouse(mulberry(50 + i), hh[2], hh[3], hh[4]), mat: propM, list: [L(hh[0], hh[1], 1, facing(hh[0], hh[1], 2, 0))], col: 2.6, shadow: 1, recv: 1, tint: 0.02 }));
+  homes.forEach((hh, i) => scatter({ name: 'Maison ' + (i + 1), key: 'house' + i, geo: gHouse(mulberry(50 + i), hh[2], hh[3], hh[4]), mat: propM, list: [L(hh[0], hh[1], 1, facing(hh[0], hh[1], 2, 0))], col: 3.0, shadow: 1, recv: 1, tint: 0.02 }));
   scatter({ name: 'Tonneau', key: 'barrel', geo: gBarrelP(r), mat: propM, list: [L(-6, 4.5), L(-6.6, 5.4), L(-5.5, 5.6), L(9, -14), L(13, 8.3), L(-9, -11)], col: 0.42, shadow: 1, tint: 0.08 });
   scatter({ name: 'Caisses', key: 'crates', geo: gCrates(r), mat: propM, list: [L(-7.5, 6.8), L(12, 10), L(10, -12.5)], col: 0.7, shadow: 1, tint: 0.08 });
   scatter({ name: 'Réverbère', key: 'lamp', geo: gLampPost(r), mat: propM, list: [L(-6, -3), L(-6, 3.2), L(6, -9), L(6, 9.5), L(12.5, 7.6), L(-14, -10), L(-14, 11)], col: 0.15, shadow: 1, tint: 0.02 });

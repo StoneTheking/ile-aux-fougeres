@@ -38,7 +38,7 @@ function updateSky(dt) {
   sunLight.target.position.copy(P.pos); sunLight.position.copy(P.pos).addScaledVector(ld, 220);
   const cp = camera.position;
   sky.position.copy(cp); stars.position.copy(cp); stars.material.opacity = SKY.night; stars.rotation.y = G.t * 0.0015;
-  const w = U.wind.value; SU.uOff.value.x -= w.x * 0.026 * dt; SU.uOff.value.y -= w.y * 0.026 * dt; // les nuages filent dans le sens du vent (décalage de texture opposé au mouvement)
+  const w = U.wind.value; SU.uOff.value.x -= w.x * 0.011 * dt; SU.uOff.value.y -= w.y * 0.011 * dt; // les nuages filent dans le sens du vent (décalage de texture opposé au mouvement)
 }
 const BEAR = ['le nord', 'le nord-est', 'l\'est', 'le sud-est', 'le sud', 'le sud-ouest', 'l\'ouest', 'le nord-ouest'];
 function updateWind() {
