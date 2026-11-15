@@ -42,7 +42,7 @@ function resize() {
 }
 addEventListener('resize', resize); addEventListener('orientationchange', () => setTimeout(resize, 250)); resize();
 const FOGU = { uFSun: { value: new V3(0, 1, 0) }, uFSunCol: { value: new THREE.Color() } };
-const POST = { uT: { value: null }, uSat: { value: 1.22 }, uCon: { value: 0.32 }, uVig: { value: 0.16 } };
+const POST = { uT: { value: null }, uSat: { value: 1.22 }, uCon: { value: 0.32 }, uVig: { value: 0.16 }, uBloom: { value: 1 } };
 let postScene, postCam;
 function buildPost() {
   const s = renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -51,8 +51,12 @@ function buildPost() {
   postScene = new THREE.Scene(); postCam = new THREE.Camera();
   const q = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), new THREE.ShaderMaterial({ uniforms: POST, depthTest: false, depthWrite: false,
     vertexShader: 'varying vec2 vU; void main(){ vU = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
-    fragmentShader: `uniform sampler2D uT; uniform float uSat, uCon, uVig; varying vec2 vU;
-void main(){ vec3 c = texture2D(uT, vU).rgb; float l = dot(c, vec3(0.299, 0.587, 0.114));
+    fragmentShader: `uniform sampler2D uT; uniform float uSat, uCon, uVig, uBloom; varying vec2 vU;
+void main(){ vec3 c = texture2D(uT, vU).rgb;
+  vec3 bl = vec3(0.0); // halo : les zones très claires débordent en lumière chaude
+  for (int i = 0; i < 8; i++) { float a = float(i) * 0.785 + 0.39, r = (i - (i / 2) * 2 == 0) ? 0.007 : 0.018; vec3 t = texture2D(uT, vU + vec2(cos(a), sin(a) * 1.7) * r).rgb; bl += max(t - 0.86, 0.0); }
+  c += bl * 0.125 * vec3(1.0, 0.82, 0.6) * 1.6 * uBloom;
+  float l = dot(c, vec3(0.299, 0.587, 0.114));
   c = mix(vec3(l), c, uSat);                                   // couleurs plus vives
   c = mix(c, c * c * (3.0 - 2.0 * c), uCon);                    // contraste doux
   c *= mix(vec3(0.94, 0.97, 1.08), vec3(1.05, 1.01, 0.95), smoothstep(0.0, 0.9, l)); // ombres froides, lumières chaudes
@@ -130,6 +134,13 @@ const FOG_FRAG = `
   fogFactor = max(fogFactor, (1.0 - exp(-fogDepth * 0.0012)) * 0.6);
   fogFactor *= mix(1.0, 0.55, smoothstep(0.0, 110.0, vWP.y));
   gl_FragColor.rgb = mix(gl_FragColor.rgb, fcol, fogFactor);
+  { // brume basse façon Breath of the Wild : dense au ras de la mer et dans les vallées, par nappes, seulement au loin
+    float fdist = length(vWP - uCamP), hd = vWP.y - uCamP.y, hb = 0.05;
+    float avg = exp(-max(uCamP.y, 0.0) * hb) * (abs(hd) > 0.05 ? (1.0 - exp(-hd * hb)) / (hd * hb) : 1.0);
+    float mpatch = 0.55 + 0.45 * sin(vWP.x * 0.016 + sin(vWP.z * 0.011) * 2.0) * sin(vWP.z * 0.013 + sin(vWP.x * 0.009) * 1.7 + 1.3);
+    float mist = (1.0 - exp(-fdist * 0.0032 * avg * mpatch)) * smoothstep(25.0, 140.0, fdist) * 0.75;
+    vec3 mcol = mix(fogColor * vec3(1.02, 1.06, 1.08), uFSunCol, pow(fsd, 2.0) * 0.6) * 1.06;
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, mcol, mist); }
 #endif
 `;
 /* matériau commun : éclairage doux, grain procédural, vent (flexion principale + flexion de détail) */
@@ -280,7 +291,10 @@ function buildTerrain() {
   vec3 grass = mix(vec3(0.20, 0.47, 0.13), vec3(0.42, 0.64, 0.17), smoothstep(0.25, 0.75, n1));
   grass = mix(grass, vec3(0.74, 0.70, 0.27), smoothstep(0.58, 0.9, n2) * 0.5);
   grass = mix(grass, vec3(0.14, 0.38, 0.16), smoothstep(0.6, 0.9, n3) * 0.4);
-  grass *= 0.72 + 0.32 * n4 + 0.28 * n5;
+  { // grain de l'herbe : deux échelles tournées et déformées qui ne tombent jamais juste, pour casser la grille
+    vec2 q = vWP.xz + (vec2(n1, n3) - 0.5) * 2.5;
+    float m1 = texture2D(uNoise, mat2(0.8, -0.6, 0.6, 0.8) * q * 0.53 + 0.17).r, m2 = texture2D(uNoise, mat2(0.36, 0.93, -0.93, 0.36) * q * 0.23 + 0.61).g, m3 = texture2D(uNoise, mat2(0.97, 0.26, -0.26, 0.97) * q * 1.31 + 0.43).b;
+    grass *= 0.76 + 0.2 * m1 + 0.18 * m2 + 0.1 * m3 + 0.06 * n5; }
   vec3 dirt = mix(vec3(0.56, 0.38, 0.22), vec3(0.42, 0.29, 0.18), n3) * (0.8 + 0.4 * n4);
   dirt = mix(dirt, vec3(0.66, 0.6, 0.5), smoothstep(0.78, 0.92, n5) * 0.6);
   float strata = smoothstep(0.35, 0.65, sin(th * 0.55 + n1 * 14.0 + n2 * 4.0) * 0.5 + 0.5);
@@ -353,12 +367,12 @@ void main(){
   // houle du large, portée par le vent
   vec2 wp = vec2(-uWind.y, uWind.x);
   float sw = sin(dot(w.xz, uWind.xy) * 0.075 - uTime * 0.95) + 0.55 * sin(dot(w.xz, uWind.xy * 0.8 + wp * 0.6) * 0.12 - uTime * 1.35) + 0.3 * sin(dot(w.xz, uWind.xy * 0.6 - wp * 0.8) * 0.21 - uTime * 1.8);
-  lvl += sw * 0.15 * (0.3 + uWind.z) * smoothstep(1.5, 7.0, d);
+  lvl += sw * 0.42 * (0.3 + uWind.z) * smoothstep(1.5, 9.0, d);
   // rouleaux : les crêtes se resserrent et grandissent en approchant du rivage, puis déferlent
   float cp = 9.0 * sqrt(d + 0.02) + ph + 1.2;
   float crest = pow(max(sin(cp), 0.0), 5.0);
   float shoal = smoothstep(7.5, 1.7, d) * smoothstep(0.0, 0.5, d);
-  lvl += crest * shoal * (0.16 + 0.55 * amp);
+  lvl += crest * shoal * (0.28 + 0.95 * amp);
   w.y += lvl; vW = w.xyz; vAmp = amp; vCrest = crest * shoal; vCp = cp; vSw = sw;
   gl_Position = projectionMatrix * viewMatrix * w;
 }`;
@@ -389,7 +403,7 @@ void main(){
   // couleur : turquoise sur le sable, bleu profond au large, bandes claires sur le dos de la houle
   vec3 col = mix(uShallow, uMidC, smoothstep(0.0, 2.6, depth));
   col = mix(col, uDeep, smoothstep(1.6, 8.5, depth));
-  col *= 0.93 + 0.1 * vSw * smoothstep(1.5, 6.0, depth) + 0.12 * (f1 - 0.5);
+  col *= 0.93 + 0.16 * vSw * smoothstep(1.5, 6.0, depth) + 0.12 * (f1 - 0.5);
   // petites rides : normale approchée par deux bruits qui glissent
   vec3 nr = normalize(vec3((f2 - 0.5) * 0.5 + (f3 - 0.5) * 0.3, 1.0, (texture2D(uNoise, vW.zx * 0.13 + flow * 1.4).g - 0.5) * 0.5 + (texture2D(uNoise, vW.zx * 0.41 - flow * 2.0).b - 0.5) * 0.3));
   float fres = pow(1.0 - clamp(dot(-vn, nr), 0.0, 1.0), 4.0);
@@ -461,6 +475,7 @@ void main(){ vec3 d = normalize(vD); float y = max(d.y, 0.0);
     vec3 cc = mix(uCloudShade, uCloudLit, lit);
     cc = mix(cc, mix(uCloudShade, uCloudLit, 0.5), smoothstep(uCover + 0.05, uCover + 0.3, n) * 0.5);
     cc += uGlow * uGlowK * pow(s, 6.0) * 0.35;
+    { float rim = 1.0 - smoothstep(uCover, uCover + 0.13, n); cc += uGlow * uGlowK * (pow(s, 3.0) * rim * 0.95 + pow(s, 10.0) * 0.45); } // contre-jour : bords fins dorés côté soleil
     cc = mix(cc, uHor, smoothstep(0.3, 0.0, y) * 0.65);
     float a = m * smoothstep(0.012, 0.1, d.y) * 0.97;
     float ci = smoothstep(0.6, 0.82, texture2D(uNoise, uv * vec2(0.045, 0.2) + uOff * 0.4 + 0.3).g) * 0.3 * smoothstep(0.08, 0.4, d.y);
@@ -471,7 +486,7 @@ void main(){ vec3 d = normalize(vD); float y = max(d.y, 0.0);
     vec2 uv2 = d.xz / (d.y + 0.1) * 1.6 + uOff * 2.4 + vec2(3.7, 1.3);
     float n3 = cn(uv2), m2 = smoothstep(uCover + 0.08, uCover + 0.13, n3) * smoothstep(0.02, 0.12, d.y) * (1.0 - a);
     float n4 = cn(uv2 + normalize(uLightD.xz + vec2(1e-4)) * 0.12), lit2 = mix(0.5, smoothstep(0.15, 0.85, clamp(0.5 + (n3 - n4) * 8.0, 0.0, 1.0)), uLitK);
-    vec3 cc2 = mix(uCloudShade, uCloudLit, lit2); cc2 = mix(cc2, uHor, smoothstep(0.3, 0.0, y) * 0.6);
+    vec3 cc2 = mix(uCloudShade, uCloudLit, lit2); cc2 += uGlow * uGlowK * (pow(s, 3.0) * (1.0 - smoothstep(uCover + 0.08, uCover + 0.2, n3)) * 0.9 + pow(s, 6.0) * 0.35); cc2 = mix(cc2, uHor, smoothstep(0.3, 0.0, y) * 0.6);
     clr *= 1.0 - m2; c = mix(c, cc2, m2 * 0.95);
   }
   gl_FragColor = vec4(c, 1.0 - clr * 0.999); }`,
@@ -627,8 +642,34 @@ function cleaf(gb, p, dir, nrm, len, wid, cb, ct, sn, f0, f1) {
 }
 // touffe : une boule sombre recouverte d'écailles de feuilles en couronnes, du sommet vers le bas
 function cluster(gb, r, c, rad, n, cols, o = {}) {
-  const fy = o.flat || 1, C = cols.map(lin), q = LOW ? 0.55 : 1, f = gb.wf;
-  gb.add(SPH, C[0].clone().multiplyScalar(0.55), M(c.x, c.y - rad * 0.05, c.z, rad * 0.8, rad * 0.76 * fy, rad * 0.8, 0, r() * 3, 0), 0.55);
+  if (!o.lobes) return clump(gb, r, c, rad, cols, o, 1, 1);
+  // feuillage d'arbre : un lobe principal et 2 à 3 lobes plus petits décalés, pour une silhouette bosselée plutôt qu'une boule
+  puff(gb, r, c, rad * 0.95, cols, o);
+  const nl = 2 + (r() * 2 | 0), a0 = r() * 6.28;
+  for (let i = 0; i < nl; i++) { const a = a0 + i / nl * 6.2832 + (r() - 0.5) * 0.8, up = (r() - 0.35) * 0.5, d = rad * (0.5 + r() * 0.2);
+    puff(gb, r, new V3(c.x + Math.cos(a) * d, c.y + up * rad, c.z + Math.sin(a) * d), rad * (0.55 + r() * 0.14), cols, o); }
+}
+// touffe d'arbre dans le style des sapins : 3 dômes empilés à bord dentelé, plus clairs vers le haut
+function puff(gb, r, c, rad, cols, o) {
+  const fy = o.flat || 1, C = cols.map(lin), f = gb.wf, up = new V3(0, 1, 0), dn = new V3(0, -1, 0);
+  const tiers = [[-0.45, 1.0, 0.5, 0.62], [-0.05, 0.86, 0.5, 0.82], [0.3, 0.6, 0.48, 1.0]], n = 10;
+  for (let ti = 0; ti < tiers.length; ti++) {
+    const [yo, rs, hs, br] = tiers[ti], R = rad * rs, h = rad * hs * fy, y = c.y + yo * rad * fy, a0 = r() * 6.28;
+    const base = C[(r() * C.length) | 0], cTop = base.clone().multiplyScalar(br * 1.18), cEdge = base.clone().multiplyScalar(br * 0.92);
+    const apex = new V3(c.x + (r() - 0.5) * R * 0.15, y + h, c.z + (r() - 0.5) * R * 0.15), und = new V3(c.x, y + h * 0.2, c.z), pts = [];
+    for (let j = 0; j < n * 2; j++) { const an = a0 + j / (n * 2) * 6.2832 + (r() - 0.5) * 0.14, rr = (j % 2 ? 0.74 : 1) * R * (0.9 + r() * 0.2);
+      pts.push({ p: new V3(c.x + Math.cos(an) * rr, y + (j % 2 ? 0.08 : -0.14) * R * fy, c.z + Math.sin(an) * rr), n: new V3(Math.cos(an) * 0.8, 0.6, Math.sin(an) * 0.8).normalize(), c: j % 2 ? cEdge.clone().multiplyScalar(0.86) : cEdge }); }
+    // anneau intermédiaire : la touffe devient un dôme arrondi plutôt qu'un cône
+    const mid = pts.map(P => ({ p: new V3(lerp(apex.x, P.p.x, 0.62), y + h * 0.78, lerp(apex.z, P.p.z, 0.62)), n: new V3(P.n.x * 0.5, 0.86, P.n.z * 0.5).normalize(), c: cTop.clone().lerp(P.c, 0.45) }));
+    for (let j = 0; j < n * 2; j++) { const k = (j + 1) % (n * 2), P1 = pts[j], P2 = pts[k], M1 = mid[j], M2 = mid[k];
+      gb.triN(apex, M1.p, M2.p, cTop, M1.c, M2.c, up, M1.n, M2.n, f * 0.8, f, f);
+      gb.triN(M1.p, P1.p, P2.p, M1.c, P1.c, P2.c, M1.n, P1.n, P2.n, f, f * 1.2, f * 1.2); gb.triN(M1.p, P2.p, M2.p, M1.c, P2.c, M2.c, M1.n, P2.n, M2.n, f, f * 1.2, f);
+      gb.triN(und, P2.p, P1.p, base.clone().multiplyScalar(0.42), P2.c.clone().multiplyScalar(0.55), P1.c.clone().multiplyScalar(0.55), dn, P2.n, P1.n, f * 0.8, f * 1.2, f * 1.2); }
+  }
+}
+function clump(gb, r, c, rad, cols, o, q, ls) {
+  const fy = o.flat || 1, C = cols.map(lin), f = gb.wf;
+  gb.add(SPH, C[0].clone().multiplyScalar(o.lobes ? 0.68 : 0.55), M(c.x, c.y - rad * 0.05, c.z, rad * 0.8, rad * 0.76 * fy, rad * 0.8, 0, r() * 3, 0), 0.55);
   const rings = [[0.96, 3], [0.74, 6], [0.46, 9], [0.16, 11], [-0.16, 11], [-0.48, 9]];
   for (const [y0, n0] of rings) {
     const cnt = Math.max(2, Math.round(n0 * q)), a0 = r() * 6.28;
@@ -639,7 +680,7 @@ function cluster(gb, r, c, rad, n, cols, o = {}) {
       const dir = v.clone().multiplyScalar(0.55).addScaledVector(t, 0.85 + (o.droop || 0)).normalize(), ln = v.clone().addScaledVector(dir, -v.dot(dir)).normalize();
       const p = c.clone().addScaledVector(v, rad * 0.5), col = C[(r() * C.length) | 0], br = 0.7 + 0.45 * (yy * 0.5 + 0.5);
       const sn = v.clone().multiplyScalar(0.75).add(new V3(0, 0.4, 0)).normalize();
-      cleaf(gb, p, dir, ln, rad * 0.8 * (o.ll || 1) * (0.85 + r() * 0.3), rad * 0.6 * (o.lw || 1) * (0.85 + r() * 0.3), col.clone().multiplyScalar(br * 0.68), col.clone().multiplyScalar(br * 1.12), sn, f * 0.8, f * 1.2);
+      cleaf(gb, p, dir, ln, rad * 0.8 * ls * (o.ll || 1) * (0.85 + r() * 0.3), rad * 0.6 * ls * (o.lw || 1) * (0.85 + r() * 0.3), col.clone().multiplyScalar(br * 0.68), col.clone().multiplyScalar(br * 1.12), sn, f * 0.8, f * 1.2);
     }
   }
 }
@@ -687,7 +728,7 @@ function growTree(gb, r, P) {
     tube(gb, pts, i => lerp(rad, r1, i / segs) * (depth === 0 && i === 0 ? (P.flare || 1.5) : depth === 0 && i === 1 ? 1.12 : 1), P.bark, depth === 0 ? 12 : depth === 1 ? 8 : 6, 0.2);
     gb.add(SPHL, P.bark, M(p.x, p.y, p.z, r1 * 1.02), 0.3, 0.2);
     if (depth >= P.kids.length) { tips.push({ p, ph: gb.wp, k: 1 }); return; }
-    if (depth >= 1 && !LOW && P.inner !== false) tips.push({ p: p.clone(), ph: gb.wp, k: 0.8 });
+    if (depth >= 1 && P.inner !== false) tips.push({ p: p.clone(), ph: gb.wp, k: 0.8 });
     const n = P.kids[depth], a0 = r() * 6.28, u = new V3(1, 0, 0); if (Math.abs(d.x) > 0.9) u.set(0, 0, 1); u.cross(d).normalize(); const v = new V3().crossVectors(d, u);
     for (let k = 0; k < n; k++) {
       const az = a0 + k / n * 6.2832 + (r() - 0.5) * 0.7, sp = P.spread * (0.75 + r() * 0.5);
@@ -702,7 +743,7 @@ function leafyTree(r, P, fruits) {
   const g = new GB(), tips = growTree(g, r, P), nl = Math.round(P.leaves * (LOW ? 0.65 : 1));
   for (const t of tips) {
     g.wp = t.ph; g.wf = 0.55; const rad = P.cr * (0.8 + r() * 0.45) * t.k, c = t.p.clone(); c.y += rad * 0.2;
-    cluster(g, r, c, rad, nl, P.cols, P.co);
+    cluster(g, r, c, rad, nl, P.cols, Object.assign({ lobes: true }, P.co)); (g.cl || (g.cl = [])).push({ c, rad, k: t.k });
     if (P.extra) P.extra(g, r, c, rad);
     if (fruits) for (let k = 0; k < (P.nf || 2); k++) { const a = r() * 6.28, y = -0.2 - r() * 0.6, rr = Math.sqrt(1 - y * y); fruits.push(new V3(c.x + Math.cos(a) * rr * rad * 0.98, c.y + y * rad * 0.92, c.z + Math.sin(a) * rr * rad * 0.98)); }
   }
@@ -721,7 +762,7 @@ function gPalm(r, o = {}) {
   tube(g, pts, i => rads[i], i => cols[i], 14, 0.08, () => 0);
   const top = P0(1);
   g.add(SPH, '#6a4a2c', M(top.x, top.y - 0.05, top.z, 0.3, 0.42, 0.3), 0.4, 0.1);
-  g.wf = 1; const nf = LOW ? 9 : 12;
+  g.wf = 1; const nf = 12;
   for (let i = 0; i < nf; i++) { const tier = i % 2; palmLeaf(g, r, top, i / nf * 6.2832 + r() * 0.3, 3.8 + r() * 0.7, 0.8 + r() * 0.15, 0.75 - tier * 0.35 + r() * 0.15, 1.9 + r() * 0.4, tier ? '#3d8f2a' : '#47a030', '#8fd04a', LOW ? 6 : 9, 0.32); }
   for (let i = 0; i < 4; i++) palmLeaf(g, r, top.clone().add(new V3(0, 0.1, 0)), i * 1.57 + 0.6, 2.0, 0.42, 1.25, 1.1, '#5cb03a', '#a6dc5a', 6, 0.3);
   g.wf = 0.2; g.wp = 0; for (let i = 0; i < 5; i++) g.add(SPH, i % 2 ? '#cdb48a' : '#bfa274', M(top.x + Math.cos(i * 1.3) * 0.3, top.y - 0.35 - (i % 2) * 0.12, top.z + Math.sin(i * 1.3) * 0.3, 0.2, 0.22, 0.2), 0.45, 0.05);
@@ -739,7 +780,9 @@ function gJungle(r) {
   const P = { len: 7.5, rad: 0.62, segs: 4, wob: 0.25, up: 0.02, kids: [4, 3], spread: 0.9, lenK: 0.52, radK: 0.6, bark: BARK.jungle, cr: 3.1, leaves: 6, cols: ['#2f8a3a', '#3c9c42', '#52b04a', '#287a36'], co: { flat: 0.78 }, leader: true, flare: 1.15 };
   const g = leafyTree(r, P);
   g.wf = 0; for (let i = 0; i < 5; i++) { const a = i * 1.257 + 0.3; g.add(new THREE.ConeGeometry(0.4, 2.8, 5, 1, true), BARK.jungle, M(Math.cos(a) * 0.55, 0.95, Math.sin(a) * 0.55, 1, 1, 0.45, Math.sin(a) * -0.28, -a, Math.cos(a) * 0.28), 0.3, 0.2); }
-  for (let i = 0; i < 7; i++) { g.wf = 0.9; g.wp = r(); const a = r() * 6.28, d = 2 + r() * 3, x = Math.cos(a) * d, z = Math.sin(a) * d, L = 2.5 + r() * 3.5; limb(g, new V3(x, 9.6, z), new V3(x + r() * 0.3, 9.6 - L, z + r() * 0.3), 0.03, 0.02, '#5d7d3c', 3, 0); for (let k = 0; k < 3; k++) leaf(g, new V3(x, 9.6 - L * (0.4 + k * 0.3), z), new V3(r() - 0.5, -0.6, r() - 0.5).normalize(), 0.4, 0.2, lin('#4a7a38'), lin('#6f9a48')); }
+  // lianes : chacune accrochée sous une touffe de feuillage (cachée dans le bas de la touffe)
+  const top = g.cl.filter(q => q.k === 1);
+  for (let i = 0; i < 7; i++) { g.wf = 0.9; g.wp = r(); const cl = top[(i * 3) % top.length], a = r() * 6.28, d = cl.rad * (0.15 + 0.3 * r()), x = cl.c.x + Math.cos(a) * d, z = cl.c.z + Math.sin(a) * d, y0 = cl.c.y - cl.rad * 0.25, L = 2.5 + r() * 3.5; limb(g, new V3(x, y0, z), new V3(x + r() * 0.3, y0 - L, z + r() * 0.3), 0.03, 0.02, '#5d7d3c', 3, 0); for (let k = 0; k < 3; k++) leaf(g, new V3(x, y0 - L * (0.4 + k * 0.3), z), new V3(r() - 0.5, -0.6, r() - 0.5).normalize(), 0.4, 0.2, lin('#4a7a38'), lin('#6f9a48')); }
   return g.build();
 }
 function gFrangi(r) {
@@ -747,9 +790,9 @@ function gFrangi(r) {
     extra: (g, rr, c, rad) => { for (let i = 0; i < 2; i++) { const a = rr() * 6.28, cx = c.x + Math.cos(a) * rad * 0.35, cz = c.z + Math.sin(a) * rad * 0.35, cy = c.y + rad * 0.45; for (let k = 0; k < 5; k++) { const b = k * 1.2566; leaf(g, new V3(cx, cy, cz), new V3(Math.cos(b), 0.35, Math.sin(b)).normalize(), 0.13, 0.09, lin('#ffe9a0'), lin('#ffffff')); } } } }).build();
 }
 function gPine(r) {
-  const g = new GB(), Ht = 9.5, nt = LOW ? 5 : 7;
+  const g = new GB(), Ht = 9.5, nt = 7;
   tube(g, [new V3(0, -0.3, 0), new V3(0.04, Ht * 0.4, 0), new V3(0, Ht * 0.85, 0)], i => [0.3, 0.2, 0.08][i], '#6a4a34', 9, 0.15, () => 0);
-  for (let w = 0; w < nt; w++) { const t = w / (nt - 1); g.wp = r(); skirt(g, r, 1.6 + t * (Ht - 3.0), lerp(2.6, 0.75, t), lerp(2.6, 1.7, t), LOW ? 7 : 11, t < 0.5 ? '#2a6a42' : '#317a48', '#62a85a', 0.25 + t * 0.6); }
+  for (let w = 0; w < nt; w++) { const t = w / (nt - 1); g.wp = r(); skirt(g, r, 1.6 + t * (Ht - 3.0), lerp(2.6, 0.75, t), lerp(2.6, 1.7, t), 11, t < 0.5 ? '#2a6a42' : '#317a48', '#62a85a', 0.25 + t * 0.6); }
   return g.build();
 }
 function gTreeFern(r) {
@@ -793,7 +836,7 @@ function gBroad(r) {
   return g.build();
 }
 function gShrub(r, cols, k = 1) { // buisson cartoon : quelques touffes serrées au ras du sol
-  const g = new GB(); g.wf = 0.4; const n = LOW ? 3 : 4 + (r() * 2 | 0);
+  const g = new GB(); g.wf = 0.4; const n = 4 + (r() * 2 | 0);
   for (let i = 0; i < n; i++) { const a = r() * 6.28, d = i ? 0.35 + r() * 0.35 : 0, rad = (0.5 + r() * 0.3) * k; g.wp = r(); cluster(g, r, new V3(Math.cos(a) * d * k, rad * 0.75 + r() * 0.25, Math.sin(a) * d * k), rad, 8, cols, { flat: 0.85 }); }
   return g.build();
 }
@@ -925,12 +968,22 @@ function gFruit(type) {
 const VEG = [], COL = new Map(), TREES = [];
 const FRUITS = [], FRUIT_MESH = {};
 const SPOTS = {};
-function addCol(x, z, r) { const k = Math.floor(x / 8) * 4096 + Math.floor(z / 8); let a = COL.get(k); if (!a) COL.set(k, a = []); a.push(x, z, r); }
+// obstacles : x, z, rayon, hauteur (Infinity = arbre, on ne passe pas ; finie = rocher en dôme, on peut sauter dessus)
+function addCol(x, z, r, h = Infinity) { const k = Math.floor(x / 8) * 4096 + Math.floor(z / 8); let a = COL.get(k); if (!a) COL.set(k, a = []); a.push(x, z, r, h); }
+const colSurf = (a, k, d, R) => heightAt(a[k], a[k + 1]) + a[k + 3] * Math.sqrt(Math.max(0, 1 - (d / R) * (d / R)));
+function rockTop(x, z) { // dessus des rochers sous ce point (-Infinity s'il n'y en a pas)
+  const cx = Math.floor(x / 8), cz = Math.floor(z / 8); let best = -Infinity;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+    const a = COL.get((cx + i) * 4096 + cz + j); if (!a) continue;
+    for (let k = 0; k < a.length; k += 4) { if (a[k + 3] === Infinity) continue; const R = a[k + 2] + 0.35, d = Math.hypot(x - a[k], z - a[k + 1]); if (d < R) best = Math.max(best, colSurf(a, k, d, R)); }
+  }
+  return best;
+}
 function collide(p, rad) {
   const cx = Math.floor(p.x / 8), cz = Math.floor(p.z / 8);
   for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
     const a = COL.get((cx + i) * 4096 + cz + j); if (!a) continue;
-    for (let k = 0; k < a.length; k += 3) { const dx = p.x - a[k], dz = p.z - a[k + 1], rr = a[k + 2] + rad, d2 = dx * dx + dz * dz; if (d2 < rr * rr && d2 > 1e-6) { const d = Math.sqrt(d2); p.x = a[k] + dx / d * rr; p.z = a[k + 1] + dz / d * rr; } }
+    for (let k = 0; k < a.length; k += 4) { const dx = p.x - a[k], dz = p.z - a[k + 1], rr = a[k + 2] + rad, d2 = dx * dx + dz * dz; if (d2 < rr * rr && d2 > 1e-6) { const d = Math.sqrt(d2); if (a[k + 3] !== Infinity && p.y !== undefined && p.y + 0.35 >= colSurf(a, k, Math.max(0, d - 0.3), rr)) continue; /* assez haut : on passe sur le rocher */ p.x = a[k] + dx / d * rr; p.z = a[k + 1] + dz / d * rr; } }
   }
 }
 const _im = new THREE.Matrix4(), _iq = new THREE.Quaternion(), _ip = new V3(), _is = new V3(), _ic = new THREE.Color();
@@ -969,12 +1022,15 @@ function scatter(o) {
       items.push({ x, z, s: lerp(o.smin, o.smax, r()), ry: r() * 6.2832, sy: o.sy ? lerp(o.sy[0], o.sy[1], r()) : 1 });
     }
   }
+  if (o.seaward) items.forEach(it => it.ry = seaYaw(it.x, it.z, it.ry)); // troncs courbés tournés vers la mer
   const tv = o.tint === undefined ? 0.16 : o.tint;
-  items.forEach(it => { if (o.space) TREES.push(it.x, it.z); if (o.col) addCol(it.x, it.z, o.col * it.s); const b = 1 - tv + r() * tv * 2, w = (r() - 0.5) * tv; it.c = [b * (1 + w), b, b * (1 - w * 1.5)]; });
+  items.forEach(it => { if (o.space) TREES.push(it.x, it.z); if (o.col) addCol(it.x, it.z, o.col * it.s, o.climb ? o.climb * it.s * (it.sy || 1) : Infinity); const b = 1 - tv + r() * tv * 2, w = (r() - 0.5) * tv; it.c = [b * (1 + w), b, b * (1 - w * 1.5)]; });
   o.geo.computeBoundingSphere(); const bs = o.geo.boundingSphere;
-  const e = { lo: o.lo || null, name: o.name, items, sink: o.sink || 0, geo: o.geo, mat: o.mat, shadow: !!o.shadow, recv: !!o.recv, col: o.col || 0, tv, gr: bs.radius + bs.center.length(), maxD: o.maxD || (o.shadow ? 4000 : 190), tiles: [], key: o.key || o.name };
+  const e = { lo: o.lo || null, name: o.name, items, sink: o.sink || 0, geo: o.geo, mat: o.mat, shadow: !!o.shadow, recv: !!o.recv, col: o.col || 0, climb: o.climb || 0, tv, gr: bs.radius + bs.center.length(), maxD: o.maxD || (o.shadow ? 4000 : 190), tiles: [], key: o.key || o.name };
   buildE(e); VEG.push(e); return e;
 }
+// orientation qui tourne la courbe d'un palmier (vers +x tourné de 0,6 rad dans gPalm) vers la pente qui descend à la mer
+function seaYaw(x, z, ry) { const e = 10, gx = heightAt(x + e, z) - heightAt(x - e, z), gz = heightAt(x, z + e) - heightAt(x, z - e); const dx = gx || gz ? -gx : x, dz = gx || gz ? -gz : z; return 0.6 - Math.atan2(dz, dx) + ((ry / 6.2832) - 0.5) * 0.9; }
 const TILE = 120, LODD = 75;
 function lowG(fn) { const L0 = LOW; LOW = true; let g; try { g = fn(); } finally { LOW = L0; } return g; } // version simplifiée pour le lointain
 function buildE(e) {
@@ -1009,7 +1065,7 @@ function updateVegLOD(cp) {
 }
 function removeCol(x, z) {
   const a = COL.get(Math.floor(x / 8) * 4096 + Math.floor(z / 8)); if (!a) return;
-  for (let k = 0; k < a.length; k += 3) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { a.splice(k, 3); return; }
+  for (let k = 0; k < a.length; k += 4) if (Math.abs(a[k] - x) < 0.01 && Math.abs(a[k + 1] - z) < 0.01) { a.splice(k, 4); return; }
 }
 function addFruits(e, type, pts, cap) {
   e.items.forEach(it => pts.forEach((p, i) => {
@@ -1043,6 +1099,8 @@ function setFruit(f, picked) {
 
 function buildFlora() {
   const r = mulberry(4242);
+  // version lointaine = même arbre (mêmes tirages aléatoires rejoués), seulement moins détaillé
+  const tw = fn => { const rec = []; const geo = fn(() => { const v = r(); rec.push(v); return v; }, false); let i = 0; const lo = lowG(() => fn(() => i < rec.length ? rec[i++] : 0.5, true)); return { geo, lo }; };
   SPOTS.spawn = findSpot(Math.PI / 2, 1.0, 1.5);
   SPOTS.apple = findSpot(0.95, 4.5, 9, 0.2, 200); SPOTS.cherry = findSpot(3.05, 4.5, 9, 0.2, 200); SPOTS.orange = findSpot(-2.6, 4.5, 11, 0.2, 200);
   SPOTS.lemon = findSpot(1.75, 12, 22, 0.25, 150);
@@ -1052,25 +1110,25 @@ function buildFlora() {
   const ring = (c, n, seed, smin, smax) => { const rr = mulberry(seed), l = []; let t = 0; while (l.length < n && t++ < 1200) { const a = rr() * 6.2832, d = 4 + Math.sqrt(rr()) * 21, x = c.x + Math.cos(a) * d, z = c.z + Math.sin(a) * d, h = heightAt(x, z); if (h < 3 || slopeAt(x, z) > 0.4) continue; if (l.some(q => Math.hypot(q.x - x, q.z - z) < 6.5)) continue; l.push({ x, z, s: lerp(smin, smax, rr()), ry: rr() * 6.28 }); } return l; };
   const treeM = mat({ ds: true, bend: 0.006, branch: 0.22, freq: 1.1, grain: 2.2, ga: 0.3, bark: 1 });
   const fa = [], fc = [], fo = [], fl = [], fb = [];
-  const eA = scatter({ name: 'Pommier', seed: 1, geo: gApple(r, fa), lo: lowG(() => gApple(mulberry(101), [])), mat: treeM, list: ring(SPOTS.apple, 13, 11, 0.7, 1.55), col: 0.26, space: 1, shadow: 1 });
-  const eC = scatter({ name: 'Cerisier', seed: 2, geo: gCherry(r, fc), lo: lowG(() => gCherry(mulberry(102), [])), mat: treeM, list: ring(SPOTS.cherry, 12, 12, 0.7, 1.6), col: 0.2, space: 1, shadow: 1, tint: 0.07 });
-  const eO = scatter({ name: 'Oranger', seed: 3, geo: gOrange(r, fo), lo: lowG(() => gOrange(mulberry(103), [])), mat: treeM, list: ring(SPOTS.orange, 12, 13, 0.7, 1.5), col: 0.2, space: 1, shadow: 1 });
+  const eA = scatter({ name: 'Pommier', seed: 1, ...tw((q, lo) => gApple(q, lo ? [] : fa)), mat: treeM, list: ring(SPOTS.apple, 13, 11, 0.7, 1.55), col: 0.26, space: 1, shadow: 1 });
+  const eC = scatter({ name: 'Cerisier', seed: 2, ...tw((q, lo) => gCherry(q, lo ? [] : fc)), mat: treeM, list: ring(SPOTS.cherry, 12, 12, 0.7, 1.6), col: 0.2, space: 1, shadow: 1, tint: 0.07 });
+  const eO = scatter({ name: 'Oranger', seed: 3, ...tw((q, lo) => gOrange(q, lo ? [] : fo)), mat: treeM, list: ring(SPOTS.orange, 12, 13, 0.7, 1.5), col: 0.2, space: 1, shadow: 1 });
   const eL = scatter({ name: 'Citronnier', seed: 4, geo: gLemon(r, fl), mat: treeM, list: [{ x: SPOTS.lemon.x, z: SPOTS.lemon.z, s: 1.3, ry: 1 }], col: 0.26, space: 1, shadow: 1, tint: 0 });
   addFruits(eA, 'apple', fa, 0.75); addFruits(eC, 'cherry', fc, 0.85); addFruits(eO, 'orange', fo, 0.75); addFruits(eL, 'lemon', fl, 0.9);
   const palmM = mat({ ds: true, bend: 0.0075, branch: 0.3, freq: 1.3, grain: 2.5, bark: 1 });
-  scatter({ name: 'Palmier', seed: 5, geo: gPalm(r), lo: lowG(() => gPalm(mulberry(105))), mat: palmM, count: 75, smin: 0.65, smax: 1.45, sy: [0.7, 1.45], col: 0.3, space: 5.5, shadow: 1, sink: 0.1, rule: (x, z, h, sl) => h > 1.0 && h < 3.6 && sl < 0.22 && clear(x, z) });
-  scatter({ name: 'Palmier penché', seed: 31, geo: gPalm(r, { h: 8.4, bend: 5.2 }), lo: lowG(() => gPalm(mulberry(131), { h: 8.4, bend: 5.2 })), mat: palmM, count: 45, smin: 0.65, smax: 1.45, sy: [0.7, 1.45], col: 0.3, space: 6, shadow: 1, sink: 0.1, rule: (x, z, h, sl) => h > 1.0 && h < 3.6 && sl < 0.22 && clear(x, z) });
-  scatter({ name: 'Palmier tordu', seed: 32, geo: gPalm(r, { h: 7.2, bend: 1.4, s: -1.3, side: 1.1 }), lo: lowG(() => gPalm(mulberry(132), { h: 7.2, bend: 1.4, s: -1.3, side: 1.1 })), mat: palmM, count: 40, smin: 0.65, smax: 1.45, sy: [0.7, 1.45], col: 0.3, space: 6, shadow: 1, sink: 0.1, rule: (x, z, h, sl) => h > 1.0 && h < 3.6 && sl < 0.22 && clear(x, z) });
-  scatter({ name: 'Grand arbre de jungle', seed: 6, geo: gJungle(r), lo: lowG(() => gJungle(mulberry(106))), mat: mat({ ds: true, bend: 0.0028, branch: 0.3, freq: 0.9, grain: 2.2, ga: 0.3, bark: 1 }), count: 230, smin: 0.55, smax: 1.6, sy: [0.8, 1.35], col: 0.6, space: 6.5, shadow: 1, sink: 0.2, rule: (x, z, h, sl, rr) => h > 3.6 && h < 34 && sl < 0.5 && clear(x, z) && jn(x, z) > 0.42 + rr() * 0.15 });
-  scatter({ name: 'Frangipanier', seed: 24, geo: gFrangi(r), lo: lowG(() => gFrangi(mulberry(124))), mat: treeM, count: 45, smin: 0.6, smax: 1.7, col: 0.24, space: 5, shadow: 1, rule: (x, z, h, sl) => h > 2.8 && h < 16 && sl < 0.35 && clear(x, z) && jn(x + 200, z) > 0.5 });
-  scatter({ name: 'Pin colonnaire', seed: 7, geo: gPine(r), lo: lowG(() => gPine(mulberry(107))), mat: mat({ ds: true, bend: 0.0022, branch: 0.16, freq: 1.0, grain: 2.5, bark: 1 }), count: 150, smin: 0.5, smax: 1.6, sy: [0.85, 1.45], col: 0.28, space: 4.5, shadow: 1, sink: 0.2, rule: (x, z, h, sl, rr) => h > 16 && h < 78 && sl < 0.85 && clear(x, z) && rr() < smooth(16, 30, h) });
-  scatter({ name: 'Fougère arborescente', seed: 8, geo: gTreeFern(r), lo: lowG(() => gTreeFern(mulberry(108))), mat: mat({ ds: true, bend: 0.012, branch: 0.22, freq: 1.5, grain: 3, bark: 1 }), count: 120, smin: 0.8, smax: 1.4, col: 0.2, space: 4, shadow: 1, rule: (x, z, h, sl) => h > 4 && h < 40 && sl < 0.7 && clear(x, z) && jn(x + 50, z) > 0.45 });
+  scatter({ name: 'Palmier', seed: 5, seaward: 1, ...tw((q, lo) => gPalm(q)), mat: palmM, count: 75, smin: 0.65, smax: 1.45, sy: [0.7, 1.45], col: 0.3, space: 5.5, shadow: 1, sink: 0.1, rule: (x, z, h, sl) => h > 1.0 && h < 3.6 && sl < 0.22 && clear(x, z) });
+  scatter({ name: 'Palmier penché', seed: 31, seaward: 1, ...tw((q, lo) => gPalm(q, { h: 8.4, bend: 5.2 })), mat: palmM, count: 45, smin: 0.65, smax: 1.45, sy: [0.7, 1.45], col: 0.3, space: 6, shadow: 1, sink: 0.1, rule: (x, z, h, sl) => h > 1.0 && h < 3.6 && sl < 0.22 && clear(x, z) });
+  scatter({ name: 'Palmier tordu', seed: 32, seaward: 1, ...tw((q, lo) => gPalm(q, { h: 7.2, bend: 1.4, s: -1.3, side: 1.1 })), mat: palmM, count: 40, smin: 0.65, smax: 1.45, sy: [0.7, 1.45], col: 0.3, space: 6, shadow: 1, sink: 0.1, rule: (x, z, h, sl) => h > 1.0 && h < 3.6 && sl < 0.22 && clear(x, z) });
+  scatter({ name: 'Grand arbre de jungle', seed: 6, ...tw((q, lo) => gJungle(q)), mat: mat({ ds: true, bend: 0.0028, branch: 0.3, freq: 0.9, grain: 2.2, ga: 0.3, bark: 1 }), count: 230, smin: 0.55, smax: 1.6, sy: [0.8, 1.35], col: 0.6, space: 6.5, shadow: 1, sink: 0.2, rule: (x, z, h, sl, rr) => h > 3.6 && h < 34 && sl < 0.5 && clear(x, z) && jn(x, z) > 0.42 + rr() * 0.15 });
+  scatter({ name: 'Frangipanier', seed: 24, ...tw((q, lo) => gFrangi(q)), mat: treeM, count: 45, smin: 0.6, smax: 1.7, col: 0.24, space: 5, shadow: 1, rule: (x, z, h, sl) => h > 2.8 && h < 16 && sl < 0.35 && clear(x, z) && jn(x + 200, z) > 0.5 });
+  scatter({ name: 'Pin colonnaire', seed: 7, ...tw((q, lo) => gPine(q)), mat: mat({ ds: true, bend: 0.0022, branch: 0.16, freq: 1.0, grain: 2.5, bark: 1 }), count: 150, smin: 0.5, smax: 1.6, sy: [0.85, 1.45], col: 0.28, space: 4.5, shadow: 1, sink: 0.2, rule: (x, z, h, sl, rr) => h > 16 && h < 78 && sl < 0.85 && clear(x, z) && rr() < smooth(16, 30, h) });
+  scatter({ name: 'Fougère arborescente', seed: 8, ...tw((q, lo) => gTreeFern(q)), mat: mat({ ds: true, bend: 0.012, branch: 0.22, freq: 1.5, grain: 3, bark: 1 }), count: 120, smin: 0.8, smax: 1.4, col: 0.2, space: 4, shadow: 1, rule: (x, z, h, sl) => h > 4 && h < 40 && sl < 0.7 && clear(x, z) && jn(x + 50, z) > 0.45 });
   scatter({ name: 'Bananier', seed: 25, geo: gBanana(r), mat: mat({ ds: true, bend: 0.02, branch: 0.2, freq: 1.3, grain: 3, ga: 0.2 }), count: 70, smin: 0.8, smax: 1.35, col: 0.2, space: 3.5, shadow: 1, rule: (x, z, h, sl) => h > 2.8 && h < 14 && sl < 0.35 && clear(x, z) && fbm(x * 0.03 + 40, z * 0.03 + 60, 2) > 0.56 });
   scatter({ name: 'Bambou', seed: 9, geo: gBamboo(r), mat: mat({ ds: true, bend: 0.009, branch: 0.12, freq: 1.4, grain: 3 }), count: 50, smin: 0.8, smax: 1.3, col: 0.7, space: 5, shadow: 1, rule: (x, z, h, sl) => h > 3 && h < 18 && sl < 0.4 && clear(x, z) && fbm(x * 0.03 + 90, z * 0.03, 2) > 0.6 });
   const shrubM = mat({ ds: true, bend: 0.03, branch: 0.06, freq: 1.8, grain: 3 });
-  scatter({ name: 'Buisson', maxD: 210, seed: 41, geo: gShrub(r, ['#4f9a38', '#5fae40', '#3f8a32', '#72b848']), lo: lowG(() => gShrub(mulberry(141), ['#4f9a38', '#5fae40', '#3f8a32', '#72b848'])), mat: shrubM, count: 1200, smin: 0.6, smax: 1.5, sy: [0.7, 1.2], tint: 0.14, col: 0.35, rule: (x, z, h, sl) => h > 3 && h < 45 && sl < 0.55 && clear(x, z) && fbm(x * 0.04 + 9, z * 0.04 - 3, 2) > 0.42 });
-  scatter({ name: 'Buisson de jungle', maxD: 210, seed: 42, geo: gShrub(r, ['#2f7a3a', '#3c8c40', '#246a32', '#4a9a48'], 1.25), lo: lowG(() => gShrub(mulberry(142), ['#2f7a3a', '#3c8c40', '#246a32', '#4a9a48'], 1.25)), mat: shrubM, count: 900, smin: 0.7, smax: 1.6, sy: [0.8, 1.3], tint: 0.12, col: 0.4, rule: (x, z, h, sl, rr) => h > 3.4 && h < 36 && sl < 0.5 && clear(x, z) && jn(x, z) > 0.3 + rr() * 0.1 });
-  const eB = scatter({ name: 'Buisson à baies', seed: 10, geo: gBush(r, fb), lo: lowG(() => gBush(mulberry(110), [])), mat: mat({ ds: true, bend: 0.03, branch: 0.06, freq: 1.8, grain: 3 }), count: 60, smin: 1.2, smax: 2.0, col: 0.5, space: 3.5, shadow: 1, rule: (x, z, h, sl) => h > 3.2 && h < 30 && sl < 0.5 && clear(x, z) });
+  scatter({ name: 'Buisson', maxD: 210, seed: 41, ...tw((q, lo) => gShrub(q, ['#4f9a38', '#5fae40', '#3f8a32', '#72b848'])), mat: shrubM, count: 1200, smin: 0.6, smax: 1.5, sy: [0.7, 1.2], tint: 0.14, col: 0.35, rule: (x, z, h, sl) => h > 3 && h < 45 && sl < 0.55 && clear(x, z) && fbm(x * 0.04 + 9, z * 0.04 - 3, 2) > 0.42 });
+  scatter({ name: 'Buisson de jungle', maxD: 210, seed: 42, ...tw((q, lo) => gShrub(q, ['#2f7a3a', '#3c8c40', '#246a32', '#4a9a48'], 1.25)), mat: shrubM, count: 900, smin: 0.7, smax: 1.6, sy: [0.8, 1.3], tint: 0.12, col: 0.4, rule: (x, z, h, sl, rr) => h > 3.4 && h < 36 && sl < 0.5 && clear(x, z) && jn(x, z) > 0.3 + rr() * 0.1 });
+  const eB = scatter({ name: 'Buisson à baies', seed: 10, ...tw((q, lo) => gBush(q, lo ? [] : fb)), mat: mat({ ds: true, bend: 0.03, branch: 0.06, freq: 1.8, grain: 3 }), count: 60, smin: 1.2, smax: 2.0, col: 0.5, space: 3.5, shadow: 1, rule: (x, z, h, sl) => h > 3.2 && h < 30 && sl < 0.5 && clear(x, z) });
   addFruits(eB, 'berry', fb, 0.5);
   const under = (x, z, h, sl) => h > 2.9 && h < 52 && sl < 0.7 && Math.hypot(x - VILLAGE.x, z - VILLAGE.z) > 36;
   scatter({ name: 'Fougère', maxD: 150, seed: 11, geo: gFern(r, '#2c8030', '#8fcc4c', 7, 1.15), mat: mat({ ds: true, bend: 0.1, branch: 0.1, freq: 2.0, grain: 4, ga: 0.2 }), count: 1400, smin: 0.7, smax: 1.6, rule: (x, z, h, sl, rr) => under(x, z, h, sl) && jn(x, z) > 0.3 + rr() * 0.25 });
@@ -1085,7 +1143,7 @@ function buildFlora() {
   scatter({ name: 'Marguerites', maxD: 150, seed: 16, geo: gDaisy(r), mat: flM, count: 700, smin: 0.9, smax: 1.6, tint: 0.04, rule: (x, z, h, sl) => h > 2.7 && h < 44 && sl < 0.5 && fbm(x * 0.05 + 33, z * 0.05, 2) > 0.5 });
   scatter({ name: 'Lupins', maxD: 170, seed: 17, geo: gLupin(r), mat: flM, count: 450, smin: 0.9, smax: 1.6, tint: 0.06, rule: (x, z, h, sl) => h > 12 && h < 70 && sl < 0.7 && fbm(x * 0.05 + 70, z * 0.05 + 70, 2) > 0.48 });
   const rockM = mat({ grain: 1.6, ga: 0.5 });
-  scatter({ name: 'Rocher', seed: 18, geo: gRock(1), mat: rockM, count: 320, smin: 0.5, smax: 3.4, sy: [0.6, 1.4], col: 0.8, shadow: 1, recv: 1, sink: 0.1, tint: 0.1, rule: (x, z, h, sl, rr) => (h > 40 || sl > 0.8 || (h > 1 && rr() < 0.07)) && clear(x, z) });
+  scatter({ name: 'Rocher', seed: 18, geo: gRock(1), mat: rockM, count: 320, smin: 0.5, smax: 3.4, sy: [0.6, 1.4], col: 0.8, climb: 0.8, shadow: 1, recv: 1, sink: 0.1, tint: 0.1, rule: (x, z, h, sl, rr) => (h > 40 || sl > 0.8 || (h > 1 && rr() < 0.07)) && clear(x, z) });
   scatter({ name: 'Galet', maxD: 90, seed: 19, geo: gRock(5, 1), mat: rockM, count: 320, smin: 0.1, smax: 0.4, tint: 0.14, recv: 1, rule: (x, z, h) => h > 0.6 && h < 2.6 || h > 40 });
   const shM = mat({ ds: true, grain: 14, ga: 0.12 });
   scatter({ name: 'Coquillage spiralé', maxD: 70, seed: 20, geo: gShell(), mat: shM, count: 110, smin: 0.7, smax: 1.5, tint: 0.08, rule: (x, z, h) => h > 0.5 && h < 1.9 });

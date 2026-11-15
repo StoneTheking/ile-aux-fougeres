@@ -53,7 +53,7 @@ function updateWind() {
 const P = { pos: new V3(), vel: new V3(), vy: 0, yaw: 0, pitch: 0, ground: true, run: false, speed: 0, ph: 0, stepD: 0, eye: 1.66 };
 const keys = {}, inp = { use: false, useHeld: false, act: false, jump: false, jumpHeld: false, down: false };
 const look = { x: 0, y: 0 }, joy = { id: -1, ox: 0, oy: 0, x: 0, y: 0 }, lookT = { id: -1, x: 0, y: 0 };
-let locked = false, canLock = !TOUCH, drag = null, runToggle = false;
+let locked = false, canLock = !TOUCH, lockFails = 0, drag = null, runToggle = false;
 const camDir = new V3();
 function setupInput() {
   addEventListener('keydown', e => {
@@ -75,7 +75,9 @@ function setupInput() {
   addEventListener('blur', () => { for (const k in keys) keys[k] = false; inp.useHeld = false; });
   canvas.addEventListener('mousedown', e => {
     if (!G.started || TOUCH) return;
-    if (!locked && canLock) { try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(() => { canLock = false; }); } catch (_) { canLock = false; } drag = { d: 0, lockClick: true }; return; }
+    if (!locked && canLock) { // juste après Échap, le navigateur refuse le verrouillage ~1 s : on réessaiera au clic suivant ; on n'abandonne qu'après 3 refus d'affilée
+      const fail = () => { if (++lockFails >= 3) canLock = false; };
+      try { const p = canvas.requestPointerLock(); if (p && p.catch) p.catch(fail); } catch (_) { fail(); } drag = { d: 0, lockClick: true }; return; }
     if (!locked) { drag = { d: 0 }; if (TF.on && e.shiftKey) inp.useHeld = true; }
     else if (e.button === 0) { inp.use = true; inp.useHeld = true; }
   });
@@ -84,7 +86,7 @@ function setupInput() {
     if (G.wheel && locked) { wheelVec.x = clamp(wheelVec.x + e.movementX, -90, 90); wheelVec.y = clamp(wheelVec.y + e.movementY, -90, 90); wheelPick(); return; }
     if (locked || drag) { look.x += clamp(e.movementX, -120, 120); look.y += clamp(e.movementY, -120, 120); if (drag) drag.d += Math.abs(e.movementX) + Math.abs(e.movementY); }
   });
-  document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === canvas; if (!locked) { inp.useHeld = false; closeWheel(false); } });
+  document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === canvas; if (locked) lockFails = 0; if (!locked) { inp.useHeld = false; closeWheel(false); } });
   document.addEventListener('pointerlockerror', () => { canLock = false; });
   addEventListener('wheel', e => { if (!G.started || BJ.on) return; if (TF.on && TF.mode === 'obj') { TF.osz = clamp(TF.osz * (e.deltaY > 0 ? 0.9 : 1.1), 0.2, 4); $('osz').value = TF.osz; $('oszTxt').textContent = '×' + TF.osz.toFixed(2); return; } if (TF.on) { const s = $('sz'); s.value = clamp(+s.value - Math.sign(e.deltaY) * 2, 3, 60); s.oninput(); } else cycle(Math.sign(e.deltaY)); }, { passive: true });
   addEventListener('contextmenu', e => e.preventDefault());
@@ -161,7 +163,7 @@ function updatePlayer(dt) {
 
 /* ---------- bras et objets ---------- */
 const FR = { apple: 0, cherry: 0, orange: 0, lemon: 0, berry: 0, pebble: 0, shell: 0, scallop: 0, star: 0 };
-const PICK = [{ id: 'pebble', veg: 'Galet', hs: 0.55, hy: 0.03 }, { id: 'shell', veg: 'Coquillage spiralé', hs: 1.4, hy: 0.03 }, { id: 'scallop', veg: 'Coquille en éventail', hs: 1.3, hy: 0.02 }, { id: 'star', veg: 'Étoile de mer', hs: 1.3, hy: 0.02 }];
+const PICK = [{ id: 'pebble', veg: 'Galet', hs: 0.13, hy: 0.03 }, { id: 'shell', veg: 'Coquillage spiralé', hs: 1.4, hy: 0.03 }, { id: 'scallop', veg: 'Coquille en éventail', hs: 1.3, hy: 0.02 }, { id: 'star', veg: 'Étoile de mer', hs: 1.3, hy: 0.02 }];
 const ITEMS = {
   hands: { name: 'Mains libres', icon: '✋' },
   shovel: { name: 'Pelle', icon: '<svg viewBox="0 0 32 32"><path d="M21 3l8 8-3 3-2-2-9 9 2 2c2 3 1 7-3 9-4 1-9 0-11-2s-3-7-2-11c2-4 6-5 9-3l2 2 9-9-2-2z" fill="currentColor"/></svg>' },
@@ -429,7 +431,7 @@ function digImpact() {
 function releaseThrow() {
   if (FR[held] === undefined || FR[held] <= 0) return;
   const type = held; FR[type]--; sfx('throw');
-  const m = new THREE.Mesh(HELD[type].geometry, HELD[type].material); m.scale.setScalar(1.2); m.castShadow = true;
+  const m = new THREE.Mesh(HELD[type].geometry, HELD[type].material); m.scale.setScalar({ pebble: 0.22, shell: 1.1, scallop: 1.0, star: 1.0 }[type] || 1.2); /* galets et coquillages à leur taille au sol */ m.castShadow = true;
   m.position.copy(camera.position).addScaledVector(camDir, 0.6); m.position.y -= 0.12; scene.add(m);
   shots.push({ m, type, v: camDir.clone().multiplyScalar(15).add(new V3(P.vel.x, 3.2, P.vel.z)), rest: false, wet: false, life: 40 });
   if (shots.length > 26) scene.remove(shots.shift().m);
@@ -589,7 +591,7 @@ function decodeIsland(str) { try { if (!str || !str.startsWith('ILE2:')) return 
 let EDITS = { add: [], del: [] };
 function saveEdits() { try { localStorage.setItem('ile-edits1', JSON.stringify(EDITS)); } catch (_) { } }
 function vegByKey(k) { return VEG.find(e => e.key === k); }
-function addItem(e, x, z, s, ry, sy) { const it = { x, z, s, ry, sy: sy || 1, c: [1, 1, 1], added: 1 }; e.items.push(it); if (e.col) addCol(x, z, e.col * s); return it; }
+function addItem(e, x, z, s, ry, sy) { const it = { x, z, s, ry, sy: sy || 1, c: [1, 1, 1], added: 1 }; e.items.push(it); if (e.col) addCol(x, z, e.col * s, e.climb ? e.climb * s * (sy || 1) : Infinity); return it; }
 function applyEdits() {
   try { const t = JSON.parse(localStorage.getItem('ile-edits1') || 'null'); if (t && t.add) EDITS = t; } catch (_) { }
   const touched = new Set();

@@ -10,7 +10,7 @@ function floorAt(x, z) {
   for (const f of FLOORS) { const dx = x - f.cx, dz = z - f.cz, a = dx * f.c + dz * f.s, b = -dx * f.s + dz * f.c; if (Math.abs(a) <= f.hx && Math.abs(b) <= f.hz) h = Math.max(h, f.h); }
   return h;
 }
-function groundAt(x, z) { return Math.max(heightAt(x, z), floorAt(x, z)); }
+function groundAt(x, z) { return Math.max(heightAt(x, z), floorAt(x, z), rockTop(x, z)); }
 function addWall(ax, az, bx, bz, th) { WALLS.push({ ax, az, bx, bz, th: th || 0.18 }); }
 function collideWalls(p, rad) {
   for (const w of WALLS) {
@@ -317,7 +317,7 @@ function buildVillage() {
   scatter({ name: 'Tas de bois', key: 'wood', geo: gWoodPile(r), mat: propM, list: [L(-20, -10, 1, 0.4)], col: 0.6, shadow: 1, tint: 0.05 });
   scatter({ name: 'Canon', key: 'cannon', geo: gCannon(r), mat: propM, list: [L(13, -3, 1, facing(13, -3, 40, -3)), L(13, 3, 1, facing(13, 3, 40, 3))], col: 0.7, shadow: 1, tint: 0.02 });
   // quelques palmiers autour du village
-  const pe = VEG.find(e => e.name === 'Palmier'); if (pe) { [[16, -9], [17, 16], [-10, -24], [-12, 25], [20, 3], [-28, 0]].forEach(([u, v]) => { const p = vp(u, v); pe.items.push({ x: p.x, z: p.z, s: 0.9 + r() * 0.5, ry: r() * 6.28, sy: 0.9 + r() * 0.5, c: [1, 1, 1] }); addCol(p.x, p.z, 0.35); }); buildE(pe); }
+  const pe = VEG.find(e => e.name === 'Palmier'); if (pe) { [[16, -9], [17, 16], [-10, -24], [-12, 25], [20, 3], [-28, 0]].forEach(([u, v]) => { const p = vp(u, v); pe.items.push({ x: p.x, z: p.z, s: 0.9 + r() * 0.5, ry: seaYaw(p.x, p.z, r() * 6.28), sy: 0.9 + r() * 0.5, c: [1, 1, 1] }); addCol(p.x, p.z, 0.35); }); buildE(pe); }
   plazaLight = new THREE.PointLight(0xffb060, 0, 22, 1.5); { const p = vp(0, 0); plazaLight.position.set(p.x, heightAt(p.x, p.z) + 4, p.z); } scene.add(plazaLight);
 
   /* PNJ */
