@@ -55,6 +55,16 @@ Pas vérifié en vraie partie : améliorations du professeur, débarquement/remo
 
 Problèmes connus : la caméra de poursuite de la tortue peut traverser les feuillages ; la tortue peut partir vers la jungle si la plage tourne.
 
+## Session du 15/11/2026 (suite)
+
+- Feuillus et buissons : touffes en dômes dentelés empilés (`puff` dans world.js), inspirées des sapins qu'Omérine aime. Les anciennes touffes en écailles (`clump`/`cleaf`) ne servent plus que pour les petites plantes.
+- LOD : `tw()` dans `buildFlora` rejoue les mêmes tirages aléatoires pour la version lointaine (même arbre, moins détaillé). En mode `LOW`, une fonction de géométrie doit consommer autant de `r()` qu'en mode normal.
+- Rochers escaladables : `COL` stocke maintenant 4 valeurs (x, z, rayon, hauteur ; `Infinity` = arbre). `rockTop` est intégré à `groundAt`.
+- Fruits : seuls ceux à moins de 80 m sont dessinés (`cullFruits`), et ils suivent le vent de leur touffe (`aT.w` = phase).
+- Lumière : brume basse façon BotW dans `FOG_FRAG`, nuages en contre-jour, halo léger (`POST.uBloom`). Attention : `patch` est un mot réservé en GLSL.
+- Terraformation : outils Relief et Terrasses, Ctrl+Z (20 coups), sauvegarde automatique en quittant.
+- Piège rencontré : un commentaire `//` inséré au milieu d'une longue ligne de code masque toute la fin de la ligne. Utiliser `/* */`.
+
 ## Suite prévue
 
 - Énigmes (le cœur du jeu, pas encore commencées).
