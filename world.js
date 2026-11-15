@@ -148,17 +148,17 @@ function mat(o = {}) {
   const m = new THREE.MeshLambertMaterial({ vertexColors: true, side: o.ds ? THREE.DoubleSide : THREE.FrontSide });
   const sw = new V3(o.bend || 0, o.branch || 0, o.freq || 1.2), grain = o.grain === undefined ? 1.3 : o.grain, ga = o.ga === undefined ? 0.3 : o.ga;
   m.onBeforeCompile = sh => {
-    sh.uniforms.uTime = U.time; sh.uniforms.uNightK = U.night; sh.uniforms.uWind = U.wind; sh.uniforms.uSw = { value: sw }; sh.uniforms.uFade = { value: o.fade || 0 }; sh.uniforms.uCamP = WU.uCam; sh.uniforms.uBark = { value: o.bark || 0 }; sh.uniforms.uFSun = FOGU.uFSun; sh.uniforms.uFSunCol = FOGU.uFSunCol; sh.uniforms.uNoise = U.noise; sh.uniforms.uGrain = { value: new THREE.Vector2(grain, ga) };
+    sh.uniforms.uTime = U.time; sh.uniforms.uNightK = U.night; sh.uniforms.uWind = U.wind; sh.uniforms.uSw = { value: sw }; sh.uniforms.uFade = { value: o.fade || 0 }; sh.uniforms.uCamP = WU.uCam; sh.uniforms.uBark = { value: o.bark || 0 }; sh.uniforms.uFSun = FOGU.uFSun; sh.uniforms.uFSunCol = FOGU.uFSunCol; sh.uniforms.uNoise = U.noise; sh.uniforms.uGrain = { value: new THREE.Vector2(grain, ga) }; sh.uniforms.uBack = { value: o.back === undefined ? 0.72 : o.back };
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\n' + WIND_DECL + (o.fruit ? 'attribute vec3 aT;\n' : 'attribute vec2 aW;\n'))
-      .replace('#include <project_vertex>', WIND_PROJ.replace('WVARS', o.fruit ? 'worg.xz = aT.xy; float whN = aT.z; float wflex = 0.0; float wbph = 0.0;' : 'float whN = position.y; float wflex = aW.x; float wbph = aW.y;'));
+      .replace('#include <common>', '#include <common>\n' + WIND_DECL + (o.fruit ? 'attribute vec4 aT;\n' : 'attribute vec2 aW;\n'))
+      .replace('#include <project_vertex>', WIND_PROJ.replace('WVARS', o.fruit ? 'worg.xz = aT.xy; float whN = aT.z; float wflex = 0.6; float wbph = aT.w; /* les fruits bougent avec leur touffe */' : 'float whN = position.y; float wflex = aW.x; float wbph = aW.y;'));
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform sampler2D uNoise; uniform vec2 uGrain; uniform float uBark, uNightK; uniform vec3 uCamP, uFSun, uFSunCol; varying vec3 vWP; varying float vFx;\n#ifdef GRASS\nvarying float vGw;\n#endif\n')
+      .replace('#include <common>', '#include <common>\nuniform sampler2D uNoise; uniform vec2 uGrain; uniform float uBark, uNightK, uBack; uniform vec3 uCamP, uFSun, uFSunCol; varying vec3 vWP; varying float vFx;\n#ifdef GRASS\nvarying float vGw;\n#endif\n')
       
       .replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n#ifdef USE_COLOR\n if (vColor.r > 1.6) { diffuseColor.rgb = vec3(0.16, 0.13, 0.1) * (1.0 - uNightK * 0.7); totalEmissiveRadiance += vec3(1.0, 0.62, 0.26) * (0.25 + 1.4 * uNightK); }\n#endif')
       .replace('#include <fog_fragment>', FOG_FRAG)
       .replace('vLightFront : vLightBack', 'vLightFront : vLightFront').replace('vIndirectFront : vIndirectBack', 'vIndirectFront : vIndirectFront')
-      .replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb *= (1.0 - uGrain.y * 0.5) + uGrain.y * (texture2D(uNoise, vWP.xz * uGrain.x * 0.21 + vWP.y * uGrain.x * 0.13).r * 0.6 + texture2D(uNoise, vWP.zx * uGrain.x * 0.9 + vWP.y * 0.31).g * 0.4);\n if (uBark > 0.5 && vFx < 0.35) diffuseColor.rgb *= 0.55 + 0.55 * texture2D(uNoise, vec2(vWP.x * 1.9 + vWP.z * 1.3, vWP.y * 0.2)).r + 0.3 * texture2D(uNoise, vec2(vWP.x * 6.1 - vWP.z * 4.7, vWP.y * 0.8)).g;\n#ifdef GRASS\n diffuseColor.rgb *= 1.0 + vGw * 0.42; diffuseColor.rgb += vec3(0.05, 0.06, 0.02) * vGw;\n#endif');
+      .replace('#include <color_fragment>', '#include <color_fragment>\n if (!gl_FrontFacing && vFx > 0.3) diffuseColor.rgb *= uBack;\n diffuseColor.rgb *= (1.0 - uGrain.y * 0.5) + uGrain.y * (texture2D(uNoise, vWP.xz * uGrain.x * 0.21 + vWP.y * uGrain.x * 0.13).r * 0.6 + texture2D(uNoise, vWP.zx * uGrain.x * 0.9 + vWP.y * 0.31).g * 0.4);\n if (uBark > 0.5 && vFx < 0.35) diffuseColor.rgb *= 0.55 + 0.55 * texture2D(uNoise, vec2(vWP.x * 1.9 + vWP.z * 1.3, vWP.y * 0.2)).r + 0.3 * texture2D(uNoise, vec2(vWP.x * 6.1 - vWP.z * 4.7, vWP.y * 0.8)).g;\n#ifdef GRASS\n diffuseColor.rgb *= 1.0 + vGw * 0.42; diffuseColor.rgb += vec3(0.05, 0.06, 0.02) * vGw;\n#endif');
   };
   if (o.grass) m.defines = { GRASS: '' };
   m.customProgramCacheKey = () => 'm' + (o.fruit ? 1 : 0) + (o.grass ? 'g' : '');
@@ -745,7 +745,7 @@ function leafyTree(r, P, fruits) {
     g.wp = t.ph; g.wf = 0.55; const rad = P.cr * (0.8 + r() * 0.45) * t.k, c = t.p.clone(); c.y += rad * 0.2;
     cluster(g, r, c, rad, nl, P.cols, Object.assign({ lobes: true }, P.co)); (g.cl || (g.cl = [])).push({ c, rad, k: t.k });
     if (P.extra) P.extra(g, r, c, rad);
-    if (fruits) for (let k = 0; k < (P.nf || 2); k++) { const a = r() * 6.28, y = -0.2 - r() * 0.6, rr = Math.sqrt(1 - y * y); fruits.push(new V3(c.x + Math.cos(a) * rr * rad * 0.98, c.y + y * rad * 0.92, c.z + Math.sin(a) * rr * rad * 0.98)); }
+    if (fruits) for (let k = 0; k < (P.nf || 2); k++) { const a = r() * 6.28, y = -0.2 - r() * 0.6, rr = Math.sqrt(1 - y * y), fp = new V3(c.x + Math.cos(a) * rr * rad * 0.98, c.y + y * rad * 0.92, c.z + Math.sin(a) * rr * rad * 0.98); fp.ph = t.ph; fruits.push(fp); }
   }
   return g;
 }
@@ -843,7 +843,7 @@ function gShrub(r, cols, k = 1) { // buisson cartoon : quelques touffes serrées
 function gBush(r, fr) {
   const P = { len: 0.35, rad: 0.06, segs: 1, wob: 0.4, up: 0.1, kids: [4, 2], spread: 1.0, lenK: 0.9, radK: 0.6, bark: '#5a4a38', cr: 0.5, leaves: 6, cols: ['#447a3c', '#528c42', '#386a34'], co: { ll: 1.0, lw: 0.6 }, nf: 2, flare: 1 };
   const g = new GB(), tips = growTree(g, r, P);
-  for (const t of tips) { g.wp = t.ph; g.wf = 0.6; const rad = P.cr * (0.8 + r() * 0.5); cluster(g, r, t.p, rad, P.leaves, P.cols, P.co); for (let k = 0; k < 2; k++) { const a = r() * 6.28; fr.push(new V3(t.p.x + Math.cos(a) * rad * 0.5, t.p.y + rad * (0.1 + r() * 0.4), t.p.z + Math.sin(a) * rad * 0.5)); } }
+  for (const t of tips) { g.wp = t.ph; g.wf = 0.6; const rad = P.cr * (0.8 + r() * 0.5); cluster(g, r, t.p, rad, P.leaves, P.cols, P.co); for (let k = 0; k < 2; k++) { const a = r() * 6.28; const fp = new V3(t.p.x + Math.cos(a) * rad * 0.5, t.p.y + rad * (0.1 + r() * 0.4), t.p.z + Math.sin(a) * rad * 0.5); fp.ph = t.ph; fr.push(fp); } }
   return g.build();
 }
 function gHibiscus(r) {
@@ -1071,14 +1071,14 @@ function addFruits(e, type, pts, cap) {
   e.items.forEach(it => pts.forEach((p, i) => {
     if (hash2(i * 7 + (it.x * 10 | 0), (it.z * 10 | 0)) > cap) return;
     const c = Math.cos(it.ry), s = Math.sin(it.ry);
-    FRUITS.push({ type, tree: it, lx: (p.x * c + p.z * s) * it.s, ly: p.y * it.s * (it.sy || 1), lz: (-p.x * s + p.z * c) * it.s, aH: p.y, picked: false, regrow: 0, x: 0, y: 0, z: 0, idx: 0 });
+    FRUITS.push({ type, tree: it, lx: (p.x * c + p.z * s) * it.s, ly: p.y * it.s * (it.sy || 1), lz: (-p.x * s + p.z * c) * it.s, aH: p.y, ph: p.ph || 0, picked: false, regrow: 0, x: 0, y: 0, z: 0, idx: 0 });
   }));
 }
 function buildFruitMeshes(sw) {
   for (const type of ['apple', 'cherry', 'orange', 'lemon', 'berry']) {
     const list = FRUITS.filter(f => f.type === type), geo = gFruit(type);
-    const aT = new Float32Array(list.length * 3); list.forEach((f, i) => { aT[i * 3] = f.tree.x; aT[i * 3 + 1] = f.tree.z; aT[i * 3 + 2] = f.aH; f.idx = i; });
-    geo.setAttribute('aT', new THREE.InstancedBufferAttribute(aT, 3));
+    const aT = new Float32Array(list.length * 4); list.forEach((f, i) => { aT[i * 4] = f.tree.x; aT[i * 4 + 1] = f.tree.z; aT[i * 4 + 2] = f.aH; aT[i * 4 + 3] = f.ph; f.idx = i; });
+    geo.setAttribute('aT', new THREE.InstancedBufferAttribute(aT, 4));
     const mesh = new THREE.InstancedMesh(geo, mat(Object.assign({ fruit: true, grain: 9, ga: 0.14, ds: true }, sw[type])), list.length);
     mesh.frustumCulled = false; scene.add(mesh); FRUIT_MESH[type] = mesh;
   }
@@ -1115,7 +1115,7 @@ function buildFlora() {
   const eO = scatter({ name: 'Oranger', seed: 3, ...tw((q, lo) => gOrange(q, lo ? [] : fo)), mat: treeM, list: ring(SPOTS.orange, 12, 13, 0.7, 1.5), col: 0.2, space: 1, shadow: 1 });
   const eL = scatter({ name: 'Citronnier', seed: 4, geo: gLemon(r, fl), mat: treeM, list: [{ x: SPOTS.lemon.x, z: SPOTS.lemon.z, s: 1.3, ry: 1 }], col: 0.26, space: 1, shadow: 1, tint: 0 });
   addFruits(eA, 'apple', fa, 0.75); addFruits(eC, 'cherry', fc, 0.85); addFruits(eO, 'orange', fo, 0.75); addFruits(eL, 'lemon', fl, 0.9);
-  const palmM = mat({ ds: true, bend: 0.0075, branch: 0.3, freq: 1.3, grain: 2.5, bark: 1 });
+  const palmM = mat({ ds: true, bend: 0.0075, branch: 0.3, freq: 1.3, grain: 2.5, bark: 1, back: 0.48 });
   scatter({ name: 'Palmier', seed: 5, seaward: 1, ...tw((q, lo) => gPalm(q)), mat: palmM, count: 75, smin: 0.65, smax: 1.45, sy: [0.7, 1.45], col: 0.3, space: 5.5, shadow: 1, sink: 0.1, rule: (x, z, h, sl) => h > 1.0 && h < 3.6 && sl < 0.22 && clear(x, z) });
   scatter({ name: 'Palmier penché', seed: 31, seaward: 1, ...tw((q, lo) => gPalm(q, { h: 8.4, bend: 5.2 })), mat: palmM, count: 45, smin: 0.65, smax: 1.45, sy: [0.7, 1.45], col: 0.3, space: 6, shadow: 1, sink: 0.1, rule: (x, z, h, sl) => h > 1.0 && h < 3.6 && sl < 0.22 && clear(x, z) });
   scatter({ name: 'Palmier tordu', seed: 32, seaward: 1, ...tw((q, lo) => gPalm(q, { h: 7.2, bend: 1.4, s: -1.3, side: 1.1 })), mat: palmM, count: 40, smin: 0.65, smax: 1.45, sy: [0.7, 1.45], col: 0.3, space: 6, shadow: 1, sink: 0.1, rule: (x, z, h, sl) => h > 1.0 && h < 3.6 && sl < 0.22 && clear(x, z) });
